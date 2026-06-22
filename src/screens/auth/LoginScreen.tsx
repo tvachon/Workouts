@@ -13,10 +13,12 @@ export function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const submit = async () => {
+    setError(null);
     if (!email.trim() || !password) {
-      Alert.alert('Missing info', 'Enter your email and password.');
+      setError('Enter your email and password.');
       return;
     }
     setSubmitting(true);
@@ -24,18 +26,18 @@ export function LoginScreen() {
       if (mode === 'signin') {
         await signIn(email, password);
       } else {
-        await signUp(email, password);
-        Alert.alert(
-          'Check your email',
-          'If email confirmation is enabled for your project, confirm your address, then sign in.',
-        );
-        setMode('signin');
+        const { needsConfirmation } = await signUp(email, password);
+        if (needsConfirmation) {
+          Alert.alert(
+            'Confirm your email',
+            'Check your inbox for a confirmation link, then sign in.',
+          );
+          setMode('signin');
+        }
+        // Otherwise a session was created and the auth listener navigates in.
       }
     } catch (e) {
-      Alert.alert(
-        mode === 'signin' ? 'Sign in failed' : 'Sign up failed',
-        messageOf(e),
-      );
+      setError(messageOf(e));
     } finally {
       setSubmitting(false);
     }
@@ -65,6 +67,8 @@ export function LoginScreen() {
         secureTextEntry
         autoCapitalize="none"
       />
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <Button
         title={mode === 'signin' ? 'Sign in' : 'Create account'}
@@ -107,6 +111,13 @@ const styles = StyleSheet.create({
     fontSize: FONT.md,
     color: COLORS.textMuted,
     marginTop: SPACING.xs,
+  },
+  error: {
+    color: COLORS.danger,
+    fontSize: FONT.sm,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: SPACING.md,
   },
   toggle: {
     marginTop: SPACING.lg,

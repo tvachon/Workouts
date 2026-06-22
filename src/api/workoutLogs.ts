@@ -22,6 +22,18 @@ export async function listLogsForExercise(
   return (data ?? []) as WorkoutLog[];
 }
 
+/** All logs recorded on a given day, across every exercise. */
+export async function listLogsForDate(
+  performedOn: string,
+): Promise<WorkoutLog[]> {
+  const { data, error } = await supabase
+    .from('workout_logs')
+    .select('*')
+    .eq('performed_on', performedOn);
+  if (error) throw error;
+  return (data ?? []) as WorkoutLog[];
+}
+
 /** The single log for an exercise on a given day, if one exists. */
 export async function getLogForDate(
   exerciseId: string,
