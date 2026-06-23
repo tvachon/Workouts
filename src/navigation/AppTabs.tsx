@@ -3,16 +3,14 @@ import { Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { COLORS } from '../constants/theme';
 import type { AppTabsParamList } from '../types/navigation.types';
-import { TodayScreen } from '../screens/today/TodayScreen';
+import { ThisWeekScreen } from '../screens/week/ThisWeekScreen';
 import { ExerciseListScreen } from '../screens/exercises/ExerciseListScreen';
-import { RoutineScreen } from '../screens/routine/RoutineScreen';
 
 const Tab = createBottomTabNavigator<AppTabsParamList>();
 
 const ICONS: Record<keyof AppTabsParamList, string> = {
-  Today: '📅',
+  Week: '🗓️',
   Exercises: '🏋️',
-  Routine: '🗓️',
 };
 
 export function AppTabs() {
@@ -30,13 +28,16 @@ export function AppTabs() {
         ),
       })}
     >
-      <Tab.Screen name="Today" component={TodayScreen} />
+      <Tab.Screen
+        name="Week"
+        component={ThisWeekScreen}
+        options={{ title: 'This Week' }}
+      />
       <Tab.Screen
         name="Exercises"
         component={ExerciseListScreen}
         options={{ title: 'Exercises' }}
       />
-      <Tab.Screen name="Routine" component={RoutineScreen} />
     </Tab.Navigator>
   );
 }

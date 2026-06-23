@@ -47,3 +47,40 @@ export function formatShortDate(iso: string): string {
   const d = fromISODate(iso);
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
+
+/** Compact day-of-month label, e.g. 'Jun 22'. */
+export function formatMonthDay(iso: string): string {
+  return fromISODate(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+export interface WeekDay {
+  weekday: number; // 0=Sun ... 6=Sat — matches routine_days.weekday
+  iso: string; // 'YYYY-MM-DD' for this day in the current week
+  isToday: boolean;
+}
+
+/**
+ * The seven days of the current week, Monday-first, each mapped to its real
+ * calendar date. The 'This Week' screen logs each day's table to that date.
+ */
+export function currentWeek(): WeekDay[] {
+  const now = new Date();
+  const todayIso = toISODate(now);
+  // Days to step back from today to reach Monday (Sun counts as the week's end).
+  const dow = now.getDay();
+  const toMonday = dow === 0 ? -6 : 1 - dow;
+  const out: WeekDay[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + toMonday + i,
+    );
+    const iso = toISODate(d);
+    out.push({ weekday: d.getDay(), iso, isToday: iso === todayIso });
+  }
+  return out;
+}

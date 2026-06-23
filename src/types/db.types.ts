@@ -28,8 +28,3 @@ export interface RoutineDay {
   weekday: number; // 0=Sun ... 6=Sat
   sort_order: number;
 }
-
-// routine_days row with its joined exercise (used by the Today screen).
-export interface RoutineDayWithExercise extends RoutineDay {
-  exercise: Exercise;
-}

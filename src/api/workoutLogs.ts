@@ -34,6 +34,20 @@ export async function listLogsForDate(
   return (data ?? []) as WorkoutLog[];
 }
 
+/** All logs in an inclusive date range, across every exercise (week view). */
+export async function listLogsForDateRange(
+  start: string,
+  end: string,
+): Promise<WorkoutLog[]> {
+  const { data, error } = await supabase
+    .from('workout_logs')
+    .select('*')
+    .gte('performed_on', start)
+    .lte('performed_on', end);
+  if (error) throw error;
+  return (data ?? []) as WorkoutLog[];
+}
+
 /** The single log for an exercise on a given day, if one exists. */
 export async function getLogForDate(
   exerciseId: string,

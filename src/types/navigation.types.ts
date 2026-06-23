@@ -1,9 +1,8 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
 export type AppTabsParamList = {
-  Today: undefined;
+  Week: undefined;
   Exercises: undefined;
-  Routine: undefined;
 };
 
 export type RootStackParamList = {
