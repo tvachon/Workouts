@@ -4,10 +4,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { COLORS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import type { RootStackParamList } from '../types/navigation.types';
-import { AppTabs } from './AppTabs';
 import { LoginScreen } from '../screens/auth/LoginScreen';
-import { ExerciseDetailScreen } from '../screens/exercises/ExerciseDetailScreen';
-import { ExerciseFormScreen } from '../screens/exercises/ExerciseFormScreen';
+import { ThisWeekScreen } from '../screens/week/ThisWeekScreen';
+import { ExerciseScreen } from '../screens/exercises/ExerciseScreen';
 import { LogEntryScreen } from '../screens/log/LogEntryScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -35,19 +34,14 @@ export function RootNavigator() {
       {session ? (
         <>
           <Stack.Screen
-            name="Tabs"
-            component={AppTabs}
+            name="Week"
+            component={ThisWeekScreen}
             options={{ headerShown: false }}
           />
           <Stack.Screen
-            name="ExerciseDetail"
-            component={ExerciseDetailScreen}
+            name="Exercise"
+            component={ExerciseScreen}
             options={{ title: 'Exercise' }}
-          />
-          <Stack.Screen
-            name="ExerciseForm"
-            component={ExerciseFormScreen}
-            options={{ title: 'Exercise', presentation: 'modal' }}
           />
           <Stack.Screen
             name="LogEntry"

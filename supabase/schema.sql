@@ -14,7 +14,7 @@ create table if not exists public.exercises (
   user_id     uuid not null references auth.users(id) on delete cascade default auth.uid(),
   name        text not null,
   description text,
-  unit        text not null default 'lb' check (unit in ('lb', 'kg')),
+  unit        text not null default 'lb' check (unit in ('lb', 'kg', 'min')),
   created_at  timestamptz not null default now()
 );
 create index if not exists exercises_user_idx on public.exercises(user_id);

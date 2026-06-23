@@ -1,10 +1,10 @@
 import { supabase, requireUserId } from '../lib/supabase';
-import type { Exercise, WeightUnit } from '../types/db.types';
+import type { Exercise, Unit } from '../types/db.types';
 
 export interface ExerciseInput {
   name: string;
   description: string | null;
-  unit: WeightUnit;
+  unit: Unit;
 }
 
 export async function listExercises(): Promise<Exercise[]> {

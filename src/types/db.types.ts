@@ -1,12 +1,13 @@
 // Row shapes mirroring supabase/schema.sql.
-export type WeightUnit = 'lb' | 'kg';
+// 'min' (minutes) is for duration-based exercises like runs.
+export type Unit = 'lb' | 'kg' | 'min';
 
 export interface Exercise {
   id: string;
   user_id: string;
   name: string;
   description: string | null;
-  unit: WeightUnit;
+  unit: Unit;
   created_at: string;
 }
 

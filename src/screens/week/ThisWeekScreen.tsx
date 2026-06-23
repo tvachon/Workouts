@@ -6,6 +6,7 @@ import React, {
 } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   PanResponder,
   Pressable,
@@ -20,8 +21,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Button } from '../../components/Button';
 import { COLORS, FONT, MAX_CONTENT_WIDTH, RADIUS, SPACING } from '../../constants/theme';
 import { weekdayLabel } from '../../constants/weekdays';
+import { useAuth } from '../../context/AuthContext';
 import { useExercises } from '../../hooks/useExercises';
 import { useRoutine } from '../../hooks/useRoutine';
 import { assignExerciseToDay, removeExerciseFromDay } from '../../api/routine';
@@ -40,6 +43,7 @@ const logKey = (exerciseId: string, iso: string) => `${exerciseId}|${iso}`;
 
 export function ThisWeekScreen() {
   const navigation = useNavigation<Nav>();
+  const { signOut } = useAuth();
   const { exercises, refresh: refreshExercises } = useExercises();
   const { refresh: refreshRoutine, exerciseIdsForWeekday } = useRoutine();
 
@@ -164,10 +168,17 @@ export function ThisWeekScreen() {
   );
 
   const openChart = useCallback(
-    (exerciseId: string) =>
-      navigation.navigate('ExerciseDetail', { exerciseId }),
+    (exerciseId: string) => navigation.navigate('Exercise', { exerciseId }),
     [navigation],
   );
+
+  const handleSignOut = useCallback(async () => {
+    try {
+      await signOut();
+    } catch (e) {
+      Alert.alert('Sign out failed', messageOf(e));
+    }
+  }, [signOut]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -181,7 +192,12 @@ export function ThisWeekScreen() {
         }
       >
         <View style={styles.inner}>
-          <Text style={styles.heading}>This Week</Text>
+          <View style={styles.topBar}>
+            <Text style={styles.heading}>This Week</Text>
+            <Pressable onPress={handleSignOut} hitSlop={8}>
+              <Text style={styles.signOut}>Sign out</Text>
+            </Pressable>
+          </View>
           <Text style={styles.sub}>
             Fill in reps and weight — each row saves itself.
           </Text>
@@ -196,33 +212,37 @@ export function ThisWeekScreen() {
               <Text style={styles.paletteTitle}>
                 {paletteOpen
                   ? 'Drag an exercise onto a day'
-                  : 'Add exercises to days'}
+                  : 'Add Exercises'}
               </Text>
               <Text style={styles.chevron}>{paletteOpen ? '⌄' : '›'}</Text>
             </Pressable>
 
             {paletteOpen ? (
-              <View style={styles.chips}>
+              <>
                 {exercises.length === 0 ? (
-                  <Pressable
-                    onPress={() => navigation.navigate('ExerciseForm', {})}
-                  >
-                    <Text style={styles.link}>
-                      No exercises yet — add one →
-                    </Text>
-                  </Pressable>
+                  <Text style={styles.emptyHint}>
+                    No exercises yet — add your first one below.
+                  </Text>
                 ) : (
-                  exercises.map((ex) => (
-                    <DraggableChip
-                      key={ex.id}
-                      exercise={ex}
-                      onDragStart={handleDragStart}
-                      onDragMove={handleDragMove}
-                      onDrop={handleDrop}
-                    />
-                  ))
+                  <View style={styles.chips}>
+                    {exercises.map((ex) => (
+                      <DraggableChip
+                        key={ex.id}
+                        exercise={ex}
+                        onDragStart={handleDragStart}
+                        onDragMove={handleDragMove}
+                        onDrop={handleDrop}
+                      />
+                    ))}
+                  </View>
                 )}
-              </View>
+                <Button
+                  title="＋ Add exercise"
+                  variant="secondary"
+                  onPress={() => navigation.navigate('Exercise', {})}
+                  style={styles.addBtn}
+                />
+              </>
             ) : null}
           </View>
 
@@ -263,7 +283,7 @@ export function ThisWeekScreen() {
                         numberOfLines={1}
                         style={[styles.cell, styles.colWeight, styles.headerText]}
                       >
-                        Wt
+                        Wt/Mins
                       </Text>
                       <Text
                         numberOfLines={1}
@@ -568,10 +588,20 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MAX_CONTENT_WIDTH,
   },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   heading: {
     fontSize: FONT.xxl,
     fontWeight: '800',
     color: COLORS.text,
+  },
+  signOut: {
+    color: COLORS.primary,
+    fontSize: FONT.md,
+    fontWeight: '600',
   },
   sub: {
     fontSize: FONT.md,
@@ -618,13 +648,18 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     marginTop: SPACING.md,
   },
-  link: {
-    color: COLORS.primary,
+  emptyHint: {
+    color: COLORS.textMuted,
     fontSize: FONT.md,
-    fontWeight: '600',
+    marginTop: SPACING.md,
+  },
+  addBtn: {
+    marginTop: SPACING.md,
   },
   chip: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#E5E7EB',
+    borderWidth: 1,
+    borderColor: COLORS.border,
     borderRadius: RADIUS.pill,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
@@ -639,7 +674,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
   },
   chipText: {
-    color: COLORS.onPrimary,
+    color: COLORS.text,
     fontWeight: '700',
     fontSize: FONT.sm,
     userSelect: 'none',
@@ -721,7 +756,7 @@ const styles = StyleSheet.create({
     width: 46,
   },
   colWeight: {
-    width: 52,
+    width: 72,
   },
   colNotes: {
     flex: 0.9,
