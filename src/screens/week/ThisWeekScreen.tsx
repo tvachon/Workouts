@@ -1,5 +1,6 @@
 import React, {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -409,6 +410,33 @@ function WorkoutRow({
   const [status, setStatus] = useState<RowStatus>(initial ? 'saved' : 'idle');
   const lastSaved = useRef({ reps, weight, notes });
 
+  // The row can mount before the parent's logs finish loading, so `initial` may
+  // arrive (or change) after mount. Re-sync the fields when that happens so
+  // late-loading data shows — but never clobber edits the user has typed and
+  // not yet saved (current values differing from the last saved snapshot).
+  useEffect(() => {
+    const synced = {
+      reps: initial ? String(initial.reps) : '',
+      weight: initial && initial.weight != null ? String(initial.weight) : '',
+      notes: initial?.notes ?? '',
+    };
+    const alreadyShown =
+      synced.reps === lastSaved.current.reps &&
+      synced.weight === lastSaved.current.weight &&
+      synced.notes === lastSaved.current.notes;
+    const dirty =
+      reps !== lastSaved.current.reps ||
+      weight !== lastSaved.current.weight ||
+      notes !== lastSaved.current.notes;
+    if (alreadyShown || dirty) return;
+
+    setReps(synced.reps);
+    setWeight(synced.weight);
+    setNotes(synced.notes);
+    lastSaved.current = synced;
+    setStatus(initial ? 'saved' : 'idle');
+  }, [initial, reps, weight, notes]);
+
   const save = useCallback(async () => {
     // Bodyweight moves (push-ups) carry no weight; duration moves (runs) track
     // minutes in the weight field and carry no reps. Treat a blank field as 0
@@ -458,8 +486,6 @@ function WorkoutRow({
         onChangeText={setReps}
         onBlur={save}
         keyboardType="number-pad"
-        placeholder="0"
-        placeholderTextColor={COLORS.textMuted}
       />
       <TextInput
         style={[styles.cell, styles.colWeight, styles.input]}
@@ -467,16 +493,12 @@ function WorkoutRow({
         onChangeText={setWeight}
         onBlur={save}
         keyboardType="decimal-pad"
-        placeholder={exercise.unit}
-        placeholderTextColor={COLORS.textMuted}
       />
       <TextInput
         style={[styles.cell, styles.colNotes, styles.input, styles.notesInput]}
         value={notes}
         onChangeText={setNotes}
         onBlur={save}
-        placeholder="—"
-        placeholderTextColor={COLORS.textMuted}
       />
       <Pressable
         style={[styles.cell, styles.colChart]}
@@ -790,6 +812,14 @@ const styles = StyleSheet.create({
   input: {
     fontSize: FONT.md,
     color: COLORS.text,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.sm,
+    // A couple of pixels of breathing room so the bordered fields don't touch.
+    marginHorizontal: 2,
+    marginVertical: 2,
+    // Half the cell's vertical padding (SPACING.sm) for a tighter field.
+    paddingVertical: SPACING.xs,
   },
   notesInput: {
     color: COLORS.textMuted,
