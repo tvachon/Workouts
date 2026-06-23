@@ -5,7 +5,7 @@ export interface LogInput {
   exerciseId: string;
   performedOn: string; // 'YYYY-MM-DD'
   reps: number;
-  weight: number;
+  weight: number | null; // null = bodyweight / no external load
   notes: string | null;
 }
 

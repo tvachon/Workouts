@@ -26,7 +26,7 @@ create table if not exists public.workout_logs (
   exercise_id  uuid not null references public.exercises(id) on delete cascade,
   performed_on date not null default current_date,
   reps         integer not null check (reps >= 0),
-  weight       numeric(7, 2) not null check (weight >= 0),
+  weight       numeric(7, 2) check (weight >= 0), -- null = bodyweight (no external load)
   notes        text,
   created_at   timestamptz not null default now(),
   -- one entry per exercise per day:
@@ -34,6 +34,10 @@ create table if not exists public.workout_logs (
 );
 create index if not exists workout_logs_exercise_date_idx
   on public.workout_logs(user_id, exercise_id, performed_on);
+
+-- Migration for databases created before weight became optional. Idempotent:
+-- dropping NOT NULL again once it's already gone is a harmless no-op.
+alter table public.workout_logs alter column weight drop not null;
 
 -- ============ routine_days (weekday grouping) ============
 -- weekday: 0 = Sunday ... 6 = Saturday (JavaScript Date.getDay convention)

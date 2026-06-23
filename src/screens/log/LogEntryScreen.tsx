@@ -48,7 +48,7 @@ export function LogEntryScreen({ route }: { route: Entry }) {
       .then((log) => {
         if (log) {
           setExisting(log);
-          setWeight(String(log.weight));
+          setWeight(log.weight != null ? String(log.weight) : '');
           setReps(String(log.reps));
           setNotes(log.notes ?? '');
         }
@@ -67,10 +67,11 @@ export function LogEntryScreen({ route }: { route: Entry }) {
       Alert.alert('Invalid date', 'Use the format YYYY-MM-DD.');
       return;
     }
-    const weightNum = Number(weight);
     const repsNum = Number(reps);
-    if (!Number.isFinite(weightNum) || weightNum < 0) {
-      Alert.alert('Invalid weight', 'Enter a number 0 or greater.');
+    // Blank weight = bodyweight (null); otherwise it must be a non-negative number.
+    const weightNum = weight.trim() !== '' ? Number(weight) : null;
+    if (weightNum !== null && (!Number.isFinite(weightNum) || weightNum < 0)) {
+      Alert.alert('Invalid weight', 'Enter a number 0 or greater, or leave it blank.');
       return;
     }
     if (!Number.isInteger(repsNum) || repsNum < 0) {

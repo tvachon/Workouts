@@ -17,7 +17,9 @@ export function LogRow({ log, unit }: LogRowProps) {
         {log.notes ? <Text style={styles.notes}>{log.notes}</Text> : null}
       </View>
       <Text style={styles.metric}>
-        {log.weight} {unit} × {log.reps}
+        {log.weight != null
+          ? `${log.weight} ${unit} × ${log.reps}`
+          : `Bodyweight × ${log.reps}`}
       </Text>
     </View>
   );

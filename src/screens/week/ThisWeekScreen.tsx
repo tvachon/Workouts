@@ -199,7 +199,7 @@ export function ThisWeekScreen() {
             </Pressable>
           </View>
           <Text style={styles.sub}>
-            Fill in reps and weight — each row saves itself.
+            Fill in reps and/or weight — each row saves itself.
           </Text>
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -402,21 +402,26 @@ function WorkoutRow({
   onSaved,
 }: WorkoutRowProps) {
   const [reps, setReps] = useState(initial ? String(initial.reps) : '');
-  const [weight, setWeight] = useState(initial ? String(initial.weight) : '');
+  const [weight, setWeight] = useState(
+    initial && initial.weight != null ? String(initial.weight) : '',
+  );
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [status, setStatus] = useState<RowStatus>(initial ? 'saved' : 'idle');
   const lastSaved = useRef({ reps, weight, notes });
 
   const save = useCallback(async () => {
-    const repsNum = Number(reps);
-    const weightNum = Number(weight);
+    // Bodyweight moves (push-ups) carry no weight; duration moves (runs) track
+    // minutes in the weight field and carry no reps. Treat a blank field as 0
+    // and save as long as at least one of reps/weight was entered.
+    const repsProvided = reps.trim() !== '';
+    const weightProvided = weight.trim() !== '';
+    const repsNum = repsProvided ? Number(reps) : 0;
+    const weightNum = weightProvided ? Number(weight) : null; // null = bodyweight
     const valid =
-      reps.trim() !== '' &&
-      weight.trim() !== '' &&
+      (repsProvided || weightProvided) &&
       Number.isInteger(repsNum) &&
       repsNum >= 0 &&
-      Number.isFinite(weightNum) &&
-      weightNum >= 0;
+      (weightNum === null || (Number.isFinite(weightNum) && weightNum >= 0));
     const changed =
       reps !== lastSaved.current.reps ||
       weight !== lastSaved.current.weight ||

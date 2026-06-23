@@ -148,10 +148,13 @@ export function ExerciseScreen({ route }: { route: ExerciseRoute }) {
     );
   }
 
-  const weightData = logs.map((l) => ({
-    value: Number(l.weight),
-    label: formatShortDate(l.performed_on),
-  }));
+  // Bodyweight entries have no weight; drop them so the chart isn't pinned to 0.
+  const weightData = logs
+    .filter((l) => l.weight != null)
+    .map((l) => ({
+      value: Number(l.weight),
+      label: formatShortDate(l.performed_on),
+    }));
   const repsData = logs.map((l) => ({
     value: l.reps,
     label: formatShortDate(l.performed_on),

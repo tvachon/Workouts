@@ -17,7 +17,7 @@ export interface WorkoutLog {
   exercise_id: string;
   performed_on: string; // ISO date 'YYYY-MM-DD'
   reps: number;
-  weight: number;
+  weight: number | null; // null = bodyweight / no external load
   notes: string | null;
   created_at: string;
 }
