@@ -148,6 +148,8 @@ export function ExerciseScreen({ route }: { route: ExerciseRoute }) {
     );
   }
 
+  const isMinutes = unit === 'min';
+
   // Bodyweight entries have no weight; drop them so the chart isn't pinned to 0.
   const weightData = logs
     .filter((l) => l.weight != null)
@@ -218,16 +220,19 @@ export function ExerciseScreen({ route }: { route: ExerciseRoute }) {
           ) : (
             <>
               <MetricLineChart
-                title="Weight over time"
+                title={isMinutes ? 'Time' : 'Weight over time'}
                 data={weightData}
                 color={COLORS.primary}
                 unit={unit}
               />
-              <MetricLineChart
-                title="Reps over time"
-                data={repsData}
-                color={COLORS.accent}
-              />
+              {/* Minutes-based exercises track duration only — no reps to chart. */}
+              {isMinutes ? null : (
+                <MetricLineChart
+                  title="Reps over time"
+                  data={repsData}
+                  color={COLORS.accent}
+                />
+              )}
 
               <Text style={styles.historyTitle}>History</Text>
               {history.length === 0 ? (
