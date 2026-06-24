@@ -1110,7 +1110,7 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
   colHandle: {
-    width: 22,
+    width: 20,
     alignItems: 'center',
     justifyContent: 'center',
     // Stop the browser selecting the glyph on mousedown (it steals the gesture).
@@ -1126,31 +1126,38 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     justifyContent: 'center',
   },
+  // Column widths are kept tight so a full row fits without horizontal scroll
+  // on narrow phones (~320px wide). The exercise column flexes to fill whatever
+  // space the fixed numeric/icon columns leave.
   colExercise: {
     flex: 1.7,
-    minWidth: 64,
+    minWidth: 50,
   },
   colReps: {
-    // Wide enough that the "Reps/Mi" header isn't ellipsized.
-    width: 72,
+    // Just wide enough for the "Reps/Mi" header and a 3-4 digit value.
+    // Tighter horizontal padding than the default cell so the header label
+    // fits the narrow column without ellipsis.
+    width: 58,
+    paddingHorizontal: 2,
     textAlign: 'center',
   },
   colWeight: {
-    width: 72,
+    width: 58,
+    paddingHorizontal: 2,
     textAlign: 'center',
   },
   colChart: {
-    width: 30,
+    width: 26,
     alignItems: 'center',
     justifyContent: 'center',
   },
   colStatus: {
-    width: 20,
+    width: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   colRemove: {
-    width: 22,
+    width: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
