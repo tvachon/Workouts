@@ -25,7 +25,11 @@ export function useRoutine() {
     refresh();
   }, [refresh]);
 
-  /** Set of exercise ids assigned to a given weekday. */
+  /**
+   * Set of exercise ids assigned to a given weekday. Insertion order follows
+   * sort_order (listRoutine sorts by it), so spreading the set yields the rows
+   * top-to-bottom in their configured order.
+   */
   const exerciseIdsForWeekday = useCallback(
     (weekday: number): Set<string> =>
       new Set(
@@ -34,5 +38,37 @@ export function useRoutine() {
     [routine],
   );
 
-  return { routine, loading, error, refresh, exerciseIdsForWeekday };
+  /**
+   * Optimistically apply a new top-to-bottom order for one weekday so the UI
+   * reflects a drag-reorder immediately, before the server round-trip resolves.
+   */
+  const applyLocalOrder = useCallback(
+    (weekday: number, orderedIds: string[]) => {
+      setRoutine((prev) => {
+        const inDay = new Map(
+          prev
+            .filter((r) => r.weekday === weekday)
+            .map((r) => [r.exercise_id, r] as const),
+        );
+        const reordered = orderedIds
+          .map((id, sort_order) => {
+            const row = inDay.get(id);
+            return row ? { ...row, sort_order } : null;
+          })
+          .filter((r): r is RoutineDay => r !== null);
+        const others = prev.filter((r) => r.weekday !== weekday);
+        return [...others, ...reordered];
+      });
+    },
+    [],
+  );
+
+  return {
+    routine,
+    loading,
+    error,
+    refresh,
+    exerciseIdsForWeekday,
+    applyLocalOrder,
+  };
 }

@@ -49,7 +49,7 @@ export function LogEntryScreen({ route }: { route: Entry }) {
         if (log) {
           setExisting(log);
           setWeight(log.weight != null ? String(log.weight) : '');
-          setReps(String(log.reps));
+          setReps(log.reps != null ? String(log.reps) : '');
           setNotes(log.notes ?? '');
         }
       })
@@ -67,15 +67,22 @@ export function LogEntryScreen({ route }: { route: Entry }) {
       Alert.alert('Invalid date', 'Use the format YYYY-MM-DD.');
       return;
     }
-    const repsNum = Number(reps);
-    // Blank weight = bodyweight (null); otherwise it must be a non-negative number.
-    const weightNum = weight.trim() !== '' ? Number(weight) : null;
+    // Blank fields are null: weight = bodyweight, reps/mi = a no-count duration
+    // run. At least one of the two must carry a value.
+    const repsProvided = reps.trim() !== '';
+    const weightProvided = weight.trim() !== '';
+    const repsNum = repsProvided ? Number(reps) : null;
+    const weightNum = weightProvided ? Number(weight) : null;
+    if (!repsProvided && !weightProvided) {
+      Alert.alert('Nothing to save', 'Enter reps/miles, a weight, or minutes.');
+      return;
+    }
     if (weightNum !== null && (!Number.isFinite(weightNum) || weightNum < 0)) {
       Alert.alert('Invalid weight', 'Enter a number 0 or greater, or leave it blank.');
       return;
     }
-    if (!Number.isInteger(repsNum) || repsNum < 0) {
-      Alert.alert('Invalid reps', 'Enter a whole number 0 or greater.');
+    if (repsNum !== null && (!Number.isFinite(repsNum) || repsNum < 0)) {
+      Alert.alert('Invalid reps', 'Enter a number 0 or greater, or leave it blank.');
       return;
     }
     setSaving(true);
@@ -138,11 +145,11 @@ export function LogEntryScreen({ route }: { route: Entry }) {
         keyboardType="decimal-pad"
       />
       <TextField
-        label="Reps"
+        label="Reps/Mi"
         value={reps}
         onChangeText={setReps}
         placeholder="0"
-        keyboardType="number-pad"
+        keyboardType="decimal-pad"
       />
       <TextField
         label="Notes (optional)"

@@ -10,19 +10,29 @@ interface LogRowProps {
 }
 
 export function LogRow({ log, unit }: LogRowProps) {
+  // reps doubles as miles on a duration run, and either field may now be null.
+  const reps = log.reps;
+  const metric =
+    unit === 'min'
+      ? [
+          log.weight != null ? `${log.weight} min` : null,
+          reps != null ? `${reps} mi` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || '—'
+      : log.weight != null
+        ? `${log.weight} ${unit}${reps != null ? ` × ${reps}` : ''}`
+        : reps != null
+          ? `Bodyweight × ${reps}`
+          : 'Bodyweight';
+
   return (
     <View style={styles.row}>
       <View style={styles.left}>
         <Text style={styles.date}>{formatDisplayDate(log.performed_on)}</Text>
         {log.notes ? <Text style={styles.notes}>{log.notes}</Text> : null}
       </View>
-      <Text style={styles.metric}>
-        {unit === 'min'
-          ? `${log.weight ?? log.reps} ${unit}`
-          : log.weight != null
-            ? `${log.weight} ${unit} × ${log.reps}`
-            : `Bodyweight × ${log.reps}`}
-      </Text>
+      <Text style={styles.metric}>{metric}</Text>
     </View>
   );
 }

@@ -4,7 +4,7 @@ import type { WorkoutLog } from '../types/db.types';
 export interface LogInput {
   exerciseId: string;
   performedOn: string; // 'YYYY-MM-DD'
-  reps: number;
+  reps: number | null; // null = no rep/distance count (e.g. duration runs)
   weight: number | null; // null = bodyweight / no external load
   notes: string | null;
 }

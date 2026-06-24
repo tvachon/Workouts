@@ -28,8 +28,12 @@ import { weekdayLabel } from '../../constants/weekdays';
 import { useAuth } from '../../context/AuthContext';
 import { useExercises } from '../../hooks/useExercises';
 import { useRoutine } from '../../hooks/useRoutine';
-import { assignExerciseToDay, removeExerciseFromDay } from '../../api/routine';
-import { listLogsForDateRange, upsertLog } from '../../api/workoutLogs';
+import {
+  assignExerciseToDay,
+  removeExerciseFromDay,
+  reorderDayExercises,
+} from '../../api/routine';
+import { deleteLog, listLogsForDateRange, upsertLog } from '../../api/workoutLogs';
 import type { Exercise, WorkoutLog } from '../../types/db.types';
 import type { RootStackParamList } from '../../types/navigation.types';
 import { currentWeek, formatMonthDay } from '../../utils/dates';
@@ -46,16 +50,25 @@ export function ThisWeekScreen() {
   const navigation = useNavigation<Nav>();
   const { signOut } = useAuth();
   const { exercises, refresh: refreshExercises } = useExercises();
-  const { refresh: refreshRoutine, exerciseIdsForWeekday } = useRoutine();
+  const {
+    refresh: refreshRoutine,
+    exerciseIdsForWeekday,
+    applyLocalOrder,
+  } = useRoutine();
 
   const week = useMemo(() => currentWeek(), []);
   const [logs, setLogs] = useState<Record<string, WorkoutLog>>({});
+  // Latest logs without re-creating the clear handler on every keystroke-save.
+  const logsRef = useRef(logs);
+  logsRef.current = logs;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverWeekday, setHoverWeekday] = useState<number | null>(null);
+  // True while a row is being dragged to reorder within a day (locks scroll).
+  const [rowDragActive, setRowDragActive] = useState(false);
 
   // Drop-zone frames + node refs in window coordinates, keyed by weekday index.
   const dayFrames = useRef<Record<number, Frame>>({});
@@ -134,9 +147,12 @@ export function ThisWeekScreen() {
 
   const handleDragMove = useCallback(
     (px: number, py: number) => {
+      // The days collapse out from under the finger, so keep the drop-zone
+      // frames fresh each move (fire-and-forget; hit-test uses the latest set).
+      measureFrames();
       setHoverWeekday(weekdayAtPoint(px, py));
     },
-    [weekdayAtPoint],
+    [measureFrames, weekdayAtPoint],
   );
 
   const handleDrop = useCallback(
@@ -168,6 +184,41 @@ export function ThisWeekScreen() {
     [refreshRoutine],
   );
 
+  // A row whose distance and time were both cleared no longer holds a workout;
+  // delete its saved log so the blanked fields don't revert on the next load.
+  const handleClearLog = useCallback(
+    async (exerciseId: string, performedOn: string) => {
+      const key = logKey(exerciseId, performedOn);
+      const existing = logsRef.current[key];
+      if (!existing) return;
+      setLogs((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      try {
+        await deleteLog(existing.id);
+      } catch (e) {
+        setError(messageOf(e));
+        loadLogs(); // restore server truth if the delete failed
+      }
+    },
+    [loadLogs],
+  );
+
+  const handleReorder = useCallback(
+    async (weekday: number, orderedIds: string[]) => {
+      applyLocalOrder(weekday, orderedIds); // optimistic: reflect instantly
+      try {
+        await reorderDayExercises(weekday, orderedIds);
+      } catch (e) {
+        setError(messageOf(e));
+        refreshRoutine(); // fall back to server truth if the write failed
+      }
+    },
+    [applyLocalOrder, refreshRoutine],
+  );
+
   const openChart = useCallback(
     (exerciseId: string) => navigation.navigate('Exercise', { exerciseId }),
     [navigation],
@@ -187,7 +238,7 @@ export function ThisWeekScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         // Don't let the page scroll steal an in-progress drag gesture.
-        scrollEnabled={!draggingId}
+        scrollEnabled={!draggingId && !rowDragActive}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={refreshAll} />
         }
@@ -257,6 +308,7 @@ export function ThisWeekScreen() {
                 dateLabel={formatMonthDay(iso)}
                 isToday={isToday}
                 highlighted={hoverWeekday === weekday}
+                collapsed={draggingId !== null}
                 registerNode={(node) => {
                   dayNodes.current[weekday] = node;
                 }}
@@ -266,58 +318,23 @@ export function ThisWeekScreen() {
                     {draggingId ? 'Drop here' : 'Rest day — nothing scheduled'}
                   </Text>
                 ) : (
-                  <View style={styles.table}>
-                    <View style={[styles.row, styles.headerRow]}>
-                      <Text
-                        numberOfLines={1}
-                        style={[styles.cell, styles.colExercise, styles.headerText]}
-                      >
-                        Exercise
-                      </Text>
-                      <Text
-                        numberOfLines={1}
-                        style={[styles.cell, styles.colReps, styles.headerText]}
-                      >
-                        Reps
-                      </Text>
-                      <Text
-                        numberOfLines={1}
-                        style={[styles.cell, styles.colWeight, styles.headerText]}
-                      >
-                        Wt/Mins
-                      </Text>
-                      <Text
-                        numberOfLines={1}
-                        style={[styles.cell, styles.colNotes, styles.headerText]}
-                      >
-                        Notes
-                      </Text>
-                      <View style={styles.colChart} />
-                      <View style={styles.colStatus} />
-                      <View style={styles.colRemove} />
-                    </View>
-
-                    {assigned.map((id) => {
-                      const ex = exercisesById.get(id);
-                      if (!ex) return null;
-                      return (
-                        <WorkoutRow
-                          key={id}
-                          exercise={ex}
-                          performedOn={iso}
-                          initial={logs[logKey(id, iso)]}
-                          onOpenChart={() => openChart(id)}
-                          onRemove={() => handleRemove(id, weekday)}
-                          onSaved={(log) =>
-                            setLogs((prev) => ({
-                              ...prev,
-                              [logKey(log.exercise_id, log.performed_on)]: log,
-                            }))
-                          }
-                        />
-                      );
-                    })}
-                  </View>
+                  <DayTable
+                    exerciseIds={assigned}
+                    exercisesById={exercisesById}
+                    performedOn={iso}
+                    logs={logs}
+                    onOpenChart={openChart}
+                    onRemove={(id) => handleRemove(id, weekday)}
+                    onClearLog={(id) => handleClearLog(id, iso)}
+                    onReorder={(orderedIds) => handleReorder(weekday, orderedIds)}
+                    onDragActiveChange={setRowDragActive}
+                    onSaved={(log) =>
+                      setLogs((prev) => ({
+                        ...prev,
+                        [logKey(log.exercise_id, log.performed_on)]: log,
+                      }))
+                    }
+                  />
                 )}
               </DaySection>
             );
@@ -335,6 +352,9 @@ interface DaySectionProps {
   dateLabel: string;
   isToday: boolean;
   highlighted: boolean;
+  // While a palette chip is in flight, every day collapses to just its header
+  // so all seven become visible drop targets without scrolling.
+  collapsed: boolean;
   registerNode: (node: View | null) => void;
   children: React.ReactNode;
 }
@@ -344,10 +364,15 @@ function DaySection({
   dateLabel,
   isToday,
   highlighted,
+  collapsed,
   registerNode,
   children,
 }: DaySectionProps) {
   const ref = useRef<View>(null);
+  // 1 = open, 0 = collapsed. Drives both the body height and its fade.
+  const anim = useRef(new Animated.Value(1)).current;
+  // Natural height of the body, measured from its own (unclipped) layout.
+  const [bodyHeight, setBodyHeight] = useState<number | null>(null);
 
   const setRef = useCallback(
     (node: View | null) => {
@@ -357,15 +382,23 @@ function DaySection({
     [registerNode],
   );
 
-  // Seed the frame on layout; it's re-measured at drag start too.
-  const onLayout = useCallback((_e: LayoutChangeEvent) => {
-    ref.current?.measureInWindow(() => {});
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: collapsed ? 0 : 1,
+      duration: 220,
+      // Animating height is a layout prop, so it can't use the native driver.
+      useNativeDriver: false,
+    }).start();
+  }, [collapsed, anim]);
+
+  const onBodyLayout = useCallback((e: LayoutChangeEvent) => {
+    const h = e.nativeEvent.layout.height;
+    setBodyHeight((prev) => (prev == null || Math.abs(prev - h) > 0.5 ? h : prev));
   }, []);
 
   return (
     <View
       ref={setRef}
-      onLayout={onLayout}
       style={[
         styles.daySection,
         isToday ? styles.dayToday : null,
@@ -378,7 +411,248 @@ function DaySection({
           {isToday ? 'Today' : dateLabel}
         </Text>
       </View>
-      {children}
+      <Animated.View
+        style={[
+          styles.dayBody,
+          { opacity: anim },
+          // Constrain to the measured height only once we have it, so the very
+          // first render lays out naturally and seeds the measurement.
+          bodyHeight != null
+            ? {
+                height: anim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, bodyHeight],
+                }),
+              }
+            : null,
+        ]}
+      >
+        <View onLayout={onBodyLayout}>{children}</View>
+      </Animated.View>
+    </View>
+  );
+}
+
+/* ---------- One day's reorderable table of exercise rows ---------- */
+
+interface DayTableProps {
+  exerciseIds: string[];
+  exercisesById: Map<string, Exercise>;
+  performedOn: string;
+  logs: Record<string, WorkoutLog>;
+  onOpenChart: (id: string) => void;
+  onRemove: (id: string) => void;
+  onClearLog: (id: string) => void;
+  onReorder: (orderedIds: string[]) => void;
+  onDragActiveChange: (active: boolean) => void;
+  onSaved: (log: WorkoutLog) => void;
+}
+
+function DayTable({
+  exerciseIds,
+  exercisesById,
+  performedOn,
+  logs,
+  onOpenChart,
+  onRemove,
+  onClearLog,
+  onReorder,
+  onDragActiveChange,
+  onSaved,
+}: DayTableProps) {
+  const pan = useRef(new Animated.Value(0)).current;
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  // Insertion gap (0..n) the dragged row would land at, in original-array terms.
+  const [dropGap, setDropGap] = useState<number | null>(null);
+  const dropGapRef = useRef<number | null>(null);
+
+  // Resting window-frame of each row, captured at drag start, keyed by index.
+  const rowNodes = useRef<Record<number, View | null>>({});
+  const frames = useRef<Array<{ y: number; height: number } | undefined>>([]);
+
+  const measureRows = useCallback(() => {
+    frames.current = new Array(exerciseIds.length);
+    for (let k = 0; k < exerciseIds.length; k++) {
+      const node = rowNodes.current[k];
+      node?.measureInWindow((_x, y, _w, height) => {
+        frames.current[k] = { y, height };
+      });
+    }
+  }, [exerciseIds.length]);
+
+  // Insertion gap = count of rows whose vertical midpoint sits above the finger.
+  const gapAt = useCallback((pointerY: number): number => {
+    let gap = 0;
+    const f = frames.current;
+    for (let k = 0; k < f.length; k++) {
+      const fr = f[k];
+      if (fr && pointerY > fr.y + fr.height / 2) gap = k + 1;
+    }
+    return gap;
+  }, []);
+
+  const handleDragStart = useCallback(
+    (index: number) => {
+      measureRows();
+      pan.setValue(0);
+      setDraggingIndex(index);
+      setDropGap(index);
+      dropGapRef.current = index;
+      onDragActiveChange(true);
+    },
+    [measureRows, pan, onDragActiveChange],
+  );
+
+  const handleDragMove = useCallback(
+    (_index: number, pointerY: number, dy: number) => {
+      pan.setValue(dy);
+      const gap = gapAt(pointerY);
+      setDropGap(gap);
+      dropGapRef.current = gap;
+    },
+    [pan, gapAt],
+  );
+
+  const handleDrop = useCallback(
+    (index: number) => {
+      const gap = dropGapRef.current ?? index;
+      setDraggingIndex(null);
+      setDropGap(null);
+      dropGapRef.current = null;
+      pan.setValue(0);
+      onDragActiveChange(false);
+
+      // Removing the dragged row shifts everything after it up by one, so a gap
+      // below the original slot maps to one index earlier in the trimmed array.
+      const next = [...exerciseIds];
+      const [moved] = next.splice(index, 1);
+      const insertAt = Math.max(0, Math.min(gap > index ? gap - 1 : gap, next.length));
+      next.splice(insertAt, 0, moved);
+      if (next.some((id, i) => id !== exerciseIds[i])) onReorder(next);
+    },
+    [exerciseIds, pan, onDragActiveChange, onReorder],
+  );
+
+  // Show the drop indicator only where it represents an actual move (not the
+  // dragged row's own slot or the gap immediately below it).
+  const showLine = (gap: number) =>
+    draggingIndex !== null &&
+    dropGap === gap &&
+    gap !== draggingIndex &&
+    gap !== draggingIndex + 1;
+
+  return (
+    <View style={styles.table}>
+      <View style={[styles.row, styles.headerRow]}>
+        <View style={styles.colHandle} />
+        <Text
+          numberOfLines={1}
+          style={[styles.cell, styles.colExercise, styles.headerText]}
+        >
+          Exercise
+        </Text>
+        <Text
+          numberOfLines={1}
+          style={[styles.cell, styles.colReps, styles.headerText]}
+        >
+          Reps/Mi
+        </Text>
+        <Text
+          numberOfLines={1}
+          style={[styles.cell, styles.colWeight, styles.headerText]}
+        >
+          Wt/Mins
+        </Text>
+        <View style={styles.colChart} />
+        <View style={styles.colStatus} />
+        <View style={styles.colRemove} />
+      </View>
+
+      {exerciseIds.map((id, index) => {
+        const ex = exercisesById.get(id);
+        if (!ex) return null;
+        const isDragging = draggingIndex === index;
+        return (
+          <React.Fragment key={id}>
+            {showLine(index) ? <View style={styles.dropLine} /> : null}
+            {/* Outer view stays put so its frame marks the resting position. */}
+            <View ref={(node) => { rowNodes.current[index] = node; }}>
+              <Animated.View
+                style={
+                  isDragging
+                    ? [
+                        styles.rowDragging,
+                        {
+                          transform: [{ translateY: pan }],
+                          zIndex: 999,
+                          elevation: 8,
+                          opacity: 0.97,
+                        },
+                      ]
+                    : null
+                }
+              >
+                <WorkoutRow
+                  exercise={ex}
+                  performedOn={performedOn}
+                  initial={logs[logKey(id, performedOn)]}
+                  dragHandle={
+                    <DragHandle
+                      index={index}
+                      onStart={handleDragStart}
+                      onMove={handleDragMove}
+                      onDrop={handleDrop}
+                    />
+                  }
+                  onOpenChart={() => onOpenChart(id)}
+                  onRemove={() => onRemove(id)}
+                  onClearLog={() => onClearLog(id)}
+                  onSaved={onSaved}
+                />
+              </Animated.View>
+            </View>
+          </React.Fragment>
+        );
+      })}
+      {showLine(exerciseIds.length) ? <View style={styles.dropLine} /> : null}
+    </View>
+  );
+}
+
+/* ---------- Drag handle (grip) that drives row reordering ---------- */
+
+interface DragHandleProps {
+  index: number;
+  onStart: (index: number) => void;
+  onMove: (index: number, pointerY: number, dy: number) => void;
+  onDrop: (index: number) => void;
+}
+
+function DragHandle({ index, onStart, onMove, onDrop }: DragHandleProps) {
+  // The PanResponder is created once, but rows change index when reordered, so
+  // read the latest props from a ref inside the handlers.
+  const latest = useRef({ index, onStart, onMove, onDrop });
+  latest.current = { index, onStart, onMove, onDrop };
+
+  const responder = useRef(
+    PanResponder.create({
+      // Capture variants claim the gesture before the ScrollView can, so the
+      // drag starts reliably (matches the palette chip behaviour).
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderGrant: () => latest.current.onStart(latest.current.index),
+      onPanResponderMove: (_e, g) =>
+        latest.current.onMove(latest.current.index, g.moveY, g.dy),
+      onPanResponderRelease: () => latest.current.onDrop(latest.current.index),
+      onPanResponderTerminate: () => latest.current.onDrop(latest.current.index),
+    }),
+  ).current;
+
+  return (
+    <View {...responder.panHandlers} style={styles.colHandle} hitSlop={8}>
+      <Text style={styles.handleIcon}>☰</Text>
     </View>
   );
 }
@@ -389,8 +663,10 @@ interface WorkoutRowProps {
   exercise: Exercise;
   performedOn: string;
   initial?: WorkoutLog;
+  dragHandle: React.ReactNode;
   onOpenChart: () => void;
   onRemove: () => void;
+  onClearLog: () => void;
   onSaved: (log: WorkoutLog) => void;
 }
 
@@ -398,11 +674,15 @@ function WorkoutRow({
   exercise,
   performedOn,
   initial,
+  dragHandle,
   onOpenChart,
   onRemove,
+  onClearLog,
   onSaved,
 }: WorkoutRowProps) {
-  const [reps, setReps] = useState(initial ? String(initial.reps) : '');
+  const [reps, setReps] = useState(
+    initial && initial.reps != null ? String(initial.reps) : '',
+  );
   const [weight, setWeight] = useState(
     initial && initial.weight != null ? String(initial.weight) : '',
   );
@@ -416,7 +696,7 @@ function WorkoutRow({
   // not yet saved (current values differing from the last saved snapshot).
   useEffect(() => {
     const synced = {
-      reps: initial ? String(initial.reps) : '',
+      reps: initial && initial.reps != null ? String(initial.reps) : '',
       weight: initial && initial.weight != null ? String(initial.weight) : '',
       notes: initial?.notes ?? '',
     };
@@ -438,23 +718,41 @@ function WorkoutRow({
   }, [initial, reps, weight, notes]);
 
   const save = useCallback(async () => {
-    // Bodyweight moves (push-ups) carry no weight; duration moves (runs) track
-    // minutes in the weight field and carry no reps. Treat a blank field as 0
-    // and save as long as at least one of reps/weight was entered.
+    // The reps/mi field holds reps for lifts or miles for runs; the weight field
+    // holds load for lifts or minutes for runs. A blank field is null (not 0).
     const repsProvided = reps.trim() !== '';
     const weightProvided = weight.trim() !== '';
-    const repsNum = repsProvided ? Number(reps) : 0;
-    const weightNum = weightProvided ? Number(weight) : null; // null = bodyweight
-    const valid =
-      (repsProvided || weightProvided) &&
-      Number.isInteger(repsNum) &&
-      repsNum >= 0 &&
-      (weightNum === null || (Number.isFinite(weightNum) && weightNum >= 0));
     const changed =
       reps !== lastSaved.current.reps ||
       weight !== lastSaved.current.weight ||
       notes !== lastSaved.current.notes;
-    if (!valid || !changed) return;
+    if (!changed) return;
+
+    // Both metrics cleared: this isn't a workout anymore. Delete any saved log
+    // so the blanked fields stick instead of reverting to the old value on the
+    // next refresh. (Without an existing log there's simply nothing to write.)
+    if (!repsProvided && !weightProvided) {
+      lastSaved.current = { reps, weight, notes };
+      if (initial) {
+        setStatus('saving');
+        try {
+          await onClearLog();
+          setStatus('idle');
+        } catch {
+          setStatus('error');
+        }
+      } else {
+        setStatus('idle');
+      }
+      return;
+    }
+
+    const repsNum = repsProvided ? Number(reps) : null; // null = no rep/distance count
+    const weightNum = weightProvided ? Number(weight) : null; // null = bodyweight
+    const valid =
+      (repsNum === null || (Number.isFinite(repsNum) && repsNum >= 0)) &&
+      (weightNum === null || (Number.isFinite(weightNum) && weightNum >= 0));
+    if (!valid) return;
 
     setStatus('saving');
     try {
@@ -471,10 +769,11 @@ function WorkoutRow({
     } catch {
       setStatus('error');
     }
-  }, [reps, weight, notes, exercise.id, performedOn, onSaved]);
+  }, [reps, weight, notes, exercise.id, performedOn, initial, onClearLog, onSaved]);
 
   return (
     <View style={styles.row}>
+      {dragHandle}
       <View style={[styles.cell, styles.colExercise]}>
         <Text style={styles.exerciseName} numberOfLines={2}>
           {exercise.name}
@@ -485,7 +784,7 @@ function WorkoutRow({
         value={reps}
         onChangeText={setReps}
         onBlur={save}
-        keyboardType="number-pad"
+        keyboardType="decimal-pad"
       />
       <TextInput
         style={[styles.cell, styles.colWeight, styles.input]}
@@ -493,12 +792,6 @@ function WorkoutRow({
         onChangeText={setWeight}
         onBlur={save}
         keyboardType="decimal-pad"
-      />
-      <TextInput
-        style={[styles.cell, styles.colNotes, styles.input, styles.notesInput]}
-        value={notes}
-        onChangeText={setNotes}
-        onBlur={save}
       />
       <Pressable
         style={[styles.cell, styles.colChart]}
@@ -730,6 +1023,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: SPACING.sm,
   },
+  // Collapsible body: clips its child so the height animation reads cleanly.
+  dayBody: {
+    overflow: 'hidden',
+  },
   dayName: {
     fontSize: FONT.lg,
     fontWeight: '700',
@@ -758,8 +1055,6 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
   },
   headerRow: {
     borderBottomWidth: 0,
@@ -769,6 +1064,31 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textMuted,
     paddingVertical: SPACING.xs,
+  },
+  rowDragging: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.sm,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  dropLine: {
+    height: 2,
+    backgroundColor: COLORS.primary,
+    borderRadius: 1,
+  },
+  colHandle: {
+    width: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Stop the browser selecting the glyph on mousedown (it steals the gesture).
+    userSelect: 'none',
+  },
+  handleIcon: {
+    fontSize: FONT.md,
+    color: COLORS.textMuted,
+    userSelect: 'none',
   },
   cell: {
     paddingHorizontal: SPACING.xs,
@@ -780,14 +1100,13 @@ const styles = StyleSheet.create({
     minWidth: 64,
   },
   colReps: {
-    width: 46,
+    // Wide enough that the "Reps/Mi" header isn't ellipsized.
+    width: 72,
+    textAlign: 'center',
   },
   colWeight: {
     width: 72,
-  },
-  colNotes: {
-    flex: 0.9,
-    minWidth: 38,
+    textAlign: 'center',
   },
   colChart: {
     width: 30,
@@ -820,9 +1139,6 @@ const styles = StyleSheet.create({
     marginVertical: 2,
     // Half the cell's vertical padding (SPACING.sm) for a tighter field.
     paddingVertical: SPACING.xs,
-  },
-  notesInput: {
-    color: COLORS.textMuted,
   },
   chartIcon: {
     fontSize: FONT.md,

@@ -25,7 +25,7 @@ create table if not exists public.workout_logs (
   user_id      uuid not null references auth.users(id) on delete cascade default auth.uid(),
   exercise_id  uuid not null references public.exercises(id) on delete cascade,
   performed_on date not null default current_date,
-  reps         integer not null check (reps >= 0),
+  reps         numeric(7, 2) check (reps >= 0), -- null = no count; fractional = miles on a run
   weight       numeric(7, 2) check (weight >= 0), -- null = bodyweight (no external load)
   notes        text,
   created_at   timestamptz not null default now(),
@@ -38,6 +38,11 @@ create index if not exists workout_logs_exercise_date_idx
 -- Migration for databases created before weight became optional. Idempotent:
 -- dropping NOT NULL again once it's already gone is a harmless no-op.
 alter table public.workout_logs alter column weight drop not null;
+
+-- Migration for databases created before reps became optional and fractional
+-- (null = duration runs with no count; numeric = miles). Idempotent.
+alter table public.workout_logs alter column reps drop not null;
+alter table public.workout_logs alter column reps type numeric(7, 2);
 
 -- ============ routine_days (weekday grouping) ============
 -- weekday: 0 = Sunday ... 6 = Saturday (JavaScript Date.getDay convention)

@@ -157,10 +157,13 @@ export function ExerciseScreen({ route }: { route: ExerciseRoute }) {
       value: Number(l.weight),
       label: formatShortDate(l.performed_on),
     }));
-  const repsData = logs.map((l) => ({
-    value: l.reps,
-    label: formatShortDate(l.performed_on),
-  }));
+  // Duration runs log no count; drop null reps so the line isn't pinned to 0.
+  const repsData = logs
+    .filter((l) => l.reps != null)
+    .map((l) => ({
+      value: Number(l.reps),
+      label: formatShortDate(l.performed_on),
+    }));
   const history = [...logs].reverse(); // newest first
 
   return (
@@ -225,14 +228,14 @@ export function ExerciseScreen({ route }: { route: ExerciseRoute }) {
                 color={COLORS.primary}
                 unit={unit}
               />
-              {/* Minutes-based exercises track duration only — no reps to chart. */}
-              {isMinutes ? null : (
-                <MetricLineChart
-                  title="Reps over time"
-                  data={repsData}
-                  color={COLORS.accent}
-                />
-              )}
+              {/* Duration runs chart distance (miles); lifts chart reps. Both
+                  read the reps column and skip days where it wasn't recorded. */}
+              <MetricLineChart
+                title={isMinutes ? 'Distance' : 'Reps over time'}
+                data={repsData}
+                color={COLORS.accent}
+                unit={isMinutes ? 'mi' : undefined}
+              />
 
               <Text style={styles.historyTitle}>History</Text>
               {history.length === 0 ? (
