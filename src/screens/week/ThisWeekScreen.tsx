@@ -10,6 +10,7 @@ import {
   Alert,
   Animated,
   PanResponder,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -45,6 +46,20 @@ type RowStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 /** Map key for a log: one exercise on one calendar day. */
 const logKey = (exerciseId: string, iso: string) => `${exerciseId}|${iso}`;
+
+// Web-only styling for grab-and-drag targets. On iOS Safari `userSelect: none`
+// alone isn't enough: a touch-drag still becomes a text selection or page
+// scroll. `touchAction: none` is the key bit — it hands the gesture to JS so the
+// PanResponder receives it instead of the browser starting a selection/scroll.
+// `touchAction` isn't in React Native's ViewStyle, so this is web-gated and cast
+// (react-native-web auto-prefixes userSelect for older WebKit).
+const dragSurfaceWebStyle =
+  Platform.OS === 'web'
+    ? ({
+        touchAction: 'none',
+        userSelect: 'none',
+      } as unknown as Record<string, unknown>)
+    : null;
 
 export function ThisWeekScreen() {
   const navigation = useNavigation<Nav>();
@@ -651,7 +666,11 @@ function DragHandle({ index, onStart, onMove, onDrop }: DragHandleProps) {
   ).current;
 
   return (
-    <View {...responder.panHandlers} style={styles.colHandle} hitSlop={8}>
+    <View
+      {...responder.panHandlers}
+      style={[styles.colHandle, dragSurfaceWebStyle]}
+      hitSlop={8}
+    >
       <Text style={styles.handleIcon}>☰</Text>
     </View>
   );
@@ -878,6 +897,7 @@ function DraggableChip({
       {...responder.panHandlers}
       style={[
         styles.chip,
+        dragSurfaceWebStyle,
         {
           transform: pan.getTranslateTransform(),
           zIndex: dragging ? 999 : 1,
