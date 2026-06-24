@@ -23,7 +23,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Button } from '../../components/Button';
 import { COLORS, FONT, MAX_CONTENT_WIDTH, RADIUS, SPACING } from '../../constants/theme';
 import { weekdayLabel } from '../../constants/weekdays';
 import { useAuth } from '../../context/AuthContext';
@@ -276,11 +275,7 @@ export function ThisWeekScreen() {
               style={styles.paletteHeader}
               onPress={() => setPaletteOpen((o) => !o)}
             >
-              <Text style={styles.paletteTitle}>
-                {paletteOpen
-                  ? 'Drag an exercise onto a day'
-                  : 'Add Exercises'}
-              </Text>
+              <Text style={styles.paletteTitle}>Add Exercises</Text>
               <Text style={styles.chevron}>{paletteOpen ? '⌄' : '›'}</Text>
             </Pressable>
 
@@ -288,27 +283,31 @@ export function ThisWeekScreen() {
               <>
                 {exercises.length === 0 ? (
                   <Text style={styles.emptyHint}>
-                    No exercises yet — add your first one below.
+                    No exercises yet — tap “＋ New” to add your first one.
                   </Text>
-                ) : (
-                  <View style={styles.chips}>
-                    {exercises.map((ex) => (
-                      <DraggableChip
-                        key={ex.id}
-                        exercise={ex}
-                        onDragStart={handleDragStart}
-                        onDragMove={handleDragMove}
-                        onDrop={handleDrop}
-                      />
-                    ))}
-                  </View>
-                )}
-                <Button
-                  title="＋ Add exercise"
-                  variant="secondary"
-                  onPress={() => navigation.navigate('Exercise', {})}
-                  style={styles.addBtn}
-                />
+                ) : null}
+                <View style={styles.chips}>
+                  {exercises.map((ex) => (
+                    <DraggableChip
+                      key={ex.id}
+                      exercise={ex}
+                      onDragStart={handleDragStart}
+                      onDragMove={handleDragMove}
+                      onDrop={handleDrop}
+                    />
+                  ))}
+                  {/* Add-new action, styled as the trailing chip in the wrap. */}
+                  <Pressable
+                    onPress={() => navigation.navigate('Exercise', {})}
+                    style={({ pressed }) => [
+                      styles.chip,
+                      styles.addChip,
+                      pressed ? styles.addChipPressed : null,
+                    ]}
+                  >
+                    <Text style={styles.addChipText}>＋ New</Text>
+                  </Pressable>
+                </View>
               </>
             ) : null}
           </View>
@@ -323,7 +322,7 @@ export function ThisWeekScreen() {
                 dateLabel={formatMonthDay(iso)}
                 isToday={isToday}
                 highlighted={hoverWeekday === weekday}
-                collapsed={draggingId !== null}
+                collapsed={paletteOpen}
                 registerNode={(node) => {
                   dayNodes.current[weekday] = node;
                 }}
@@ -993,9 +992,6 @@ const styles = StyleSheet.create({
     fontSize: FONT.md,
     marginTop: SPACING.md,
   },
-  addBtn: {
-    marginTop: SPACING.md,
-  },
   chip: {
     backgroundColor: '#E5E7EB',
     borderWidth: 1,
@@ -1018,6 +1014,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: FONT.sm,
     userSelect: 'none',
+  },
+  // Trailing "＋ New" chip — same pill footprint as a chip, dashed to read as
+  // an action rather than a draggable item.
+  addChip: {
+    backgroundColor: 'transparent',
+    borderStyle: 'dashed',
+    borderColor: COLORS.primary,
+  },
+  addChipPressed: {
+    opacity: 0.6,
+  },
+  addChipText: {
+    color: COLORS.primary,
+    fontWeight: '700',
+    fontSize: FONT.sm,
   },
 
   /* day section */
