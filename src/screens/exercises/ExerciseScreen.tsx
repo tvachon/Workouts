@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import {
@@ -86,12 +86,6 @@ export function ExerciseScreen({ route }: { route: ExerciseRoute }) {
     }, [loadMeta, refreshLogs, exerciseId]),
   );
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      title: isEdit ? name || 'Exercise' : 'New exercise',
-    });
-  }, [navigation, isEdit, name]);
-
   const save = async () => {
     if (!name.trim()) {
       Alert.alert('Missing name', 'Give the exercise a name.');
@@ -178,7 +172,13 @@ export function ExerciseScreen({ route }: { route: ExerciseRoute }) {
   return (
     <Screen refreshing={isEdit ? loadingLogs : false} onRefresh={isEdit ? refreshLogs : undefined}>
       <View style={styles.headerRow}>
-        <Text style={styles.heading}>{isEdit ? 'Edit exercise' : 'New exercise'}</Text>
+        <Text style={styles.heading} numberOfLines={1}>
+          {isEdit
+            ? name.trim()
+              ? `Edit “${name.trim()}”`
+              : 'Edit exercise'
+            : 'New exercise'}
+        </Text>
         {dirty || saving ? (
           <Button title="Save" onPress={save} loading={saving} style={styles.saveBtn} />
         ) : (
@@ -292,6 +292,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   heading: {
+    flex: 1,
+    marginRight: SPACING.md,
     fontSize: FONT.xl,
     fontWeight: '800',
     color: COLORS.text,
