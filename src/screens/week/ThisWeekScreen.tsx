@@ -79,6 +79,27 @@ export function ThisWeekScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Cross-fades the header toggle between the caret (closed) and the red close
+  // badge (open). 0 = closed, 1 = open.
+  const paletteAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(paletteAnim, {
+      toValue: paletteOpen ? 1 : 0,
+      duration: 200,
+      // Web (and Expo web) has no native animated module; opacity/transform/
+      // height animate fine on the JS driver and this avoids the fallback warning.
+      useNativeDriver: false,
+    }).start();
+  }, [paletteOpen, paletteAnim]);
+  // Natural height of the palette body (chips + hints), measured from its own
+  // unclipped layout so the open/close height animation has a target.
+  const [paletteBodyHeight, setPaletteBodyHeight] = useState<number | null>(null);
+  const onPaletteBodyLayout = useCallback((e: LayoutChangeEvent) => {
+    const h = e.nativeEvent.layout.height;
+    setPaletteBodyHeight((prev) =>
+      prev == null || Math.abs(prev - h) > 0.5 ? h : prev,
+    );
+  }, []);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [hoverWeekday, setHoverWeekday] = useState<number | null>(null);
   // True while a row is being dragged to reorder within a day (locks scroll).
@@ -264,9 +285,6 @@ export function ThisWeekScreen() {
               <Text style={styles.signOut}>Sign out</Text>
             </Pressable>
           </View>
-          <Text style={styles.sub}>
-            Fill in reps and/or weight — each row saves itself.
-          </Text>
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           {/* Collapsible palette of draggable exercise chips */}
@@ -276,11 +294,66 @@ export function ThisWeekScreen() {
               onPress={() => setPaletteOpen((o) => !o)}
             >
               <Text style={styles.paletteTitle}>Add Exercises</Text>
-              <Text style={styles.chevron}>{paletteOpen ? '⌄' : '›'}</Text>
+              {/* Caret (closed) ↔ red ✕ badge (open), cross-faded as the panel
+                  toggles so the "tap to close" affordance animates in. */}
+              <View style={styles.headerToggle}>
+                <Animated.View
+                  style={[
+                    styles.toggleLayer,
+                    {
+                      opacity: paletteAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 0],
+                      }),
+                    },
+                  ]}
+                >
+                  <Text style={styles.chevron}>›</Text>
+                </Animated.View>
+                <Animated.View
+                  style={[
+                    styles.toggleLayer,
+                    {
+                      opacity: paletteAnim,
+                      transform: [
+                        {
+                          scale: paletteAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.5, 1],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                >
+                  <View style={styles.closeBadge}>
+                    <Text style={styles.closeBadgeText}>✕</Text>
+                  </View>
+                </Animated.View>
+              </View>
             </Pressable>
 
-            {paletteOpen ? (
-              <>
+            {/* Body is always rendered so its natural height can be measured;
+                the wrapper clips and animates that height open/closed. */}
+            <Animated.View
+              pointerEvents={paletteOpen ? 'auto' : 'none'}
+              style={[
+                styles.paletteBody,
+                // A chip being dragged must escape the clip region.
+                draggingId ? styles.paletteBodyLifted : null,
+                {
+                  opacity: paletteAnim,
+                  height:
+                    paletteBodyHeight != null
+                      ? paletteAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, paletteBodyHeight],
+                        })
+                      : 0,
+                },
+              ]}
+            >
+              <View onLayout={onPaletteBodyLayout}>
                 {exercises.length === 0 ? (
                   <Text style={styles.emptyHint}>
                     No exercises yet — tap “＋ New” to add your first one.
@@ -308,8 +381,11 @@ export function ThisWeekScreen() {
                     <Text style={styles.addChipText}>＋ New</Text>
                   </Pressable>
                 </View>
-              </>
-            ) : null}
+                <Text style={styles.paletteHint}>
+                  Drag exercises to any day below ↓
+                </Text>
+              </View>
+            </Animated.View>
           </View>
 
           {/* One section per day of the current week, Monday-first */}
@@ -931,6 +1007,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: SPACING.lg,
   },
   heading: {
     fontSize: FONT.xxl,
@@ -941,11 +1018,6 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: FONT.md,
     fontWeight: '600',
-  },
-  sub: {
-    fontSize: FONT.md,
-    color: COLORS.textMuted,
-    marginBottom: SPACING.lg,
   },
   error: {
     color: COLORS.danger,
@@ -966,6 +1038,14 @@ const styles = StyleSheet.create({
     zIndex: 10,
     overflow: 'visible',
   },
+  // Clips the chips while the panel's height animates open/closed.
+  paletteBody: {
+    overflow: 'hidden',
+  },
+  // While dragging, stop clipping so a lifted chip can travel onto the days.
+  paletteBodyLifted: {
+    overflow: 'visible',
+  },
   paletteHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -981,6 +1061,34 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontWeight: '700',
   },
+  // Fixed slot the caret and close badge share so they overlay for the cross-fade.
+  headerToggle: {
+    width: 24,
+    height: 24,
+  },
+  toggleLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeBadgeText: {
+    color: COLORS.onPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 16,
+  },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -991,6 +1099,12 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontSize: FONT.md,
     marginTop: SPACING.md,
+  },
+  paletteHint: {
+    color: COLORS.textMuted,
+    fontSize: FONT.sm,
+    marginTop: SPACING.md,
+    textAlign: 'center',
   },
   chip: {
     backgroundColor: '#E5E7EB',
@@ -1162,7 +1276,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   exerciseName: {
-    fontSize: FONT.md,
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.text,
   },

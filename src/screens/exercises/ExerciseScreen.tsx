@@ -1,5 +1,5 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import {
   useFocusEffect,
@@ -119,25 +119,34 @@ export function ExerciseScreen({ route }: { route: ExerciseRoute }) {
 
   const confirmDelete = () => {
     if (!exerciseId) return;
-    Alert.alert(
-      'Delete exercise?',
-      'This permanently deletes the exercise and all its logged workouts.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteExercise(exerciseId);
-              navigation.goBack();
-            } catch (e) {
-              Alert.alert('Delete failed', messageOf(e));
-            }
-          },
-        },
-      ],
-    );
+    const title = 'Delete exercise?';
+    const message =
+      'This permanently deletes this exercise and ALL of its logged history ' +
+      'across every day. This cannot be undone.';
+
+    const runDelete = async () => {
+      try {
+        await deleteExercise(exerciseId);
+        navigation.goBack();
+      } catch (e) {
+        // RNW's Alert.alert is a no-op, so use the browser dialog on web.
+        if (Platform.OS === 'web') window.alert(messageOf(e));
+        else Alert.alert('Delete failed', messageOf(e));
+      }
+    };
+
+    // react-native-web has no Alert implementation, so the confirm dialog
+    // (and its destructive callback) never fire there. Fall back to the
+    // browser's native confirm so the warning always shows before deleting.
+    if (Platform.OS === 'web') {
+      if (window.confirm(`${title}\n\n${message}`)) runDelete();
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: runDelete },
+    ]);
   };
 
   if (loadingMeta) {
