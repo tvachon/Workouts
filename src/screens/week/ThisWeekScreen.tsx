@@ -104,6 +104,9 @@ export function ThisWeekScreen() {
   const [hoverWeekday, setHoverWeekday] = useState<number | null>(null);
   // True while a row is being dragged to reorder within a day (locks scroll).
   const [rowDragActive, setRowDragActive] = useState(false);
+  // When on, each row exposes its sort handle + remove button; off keeps the
+  // week clean and focused on logging.
+  const [editMode, setEditMode] = useState(false);
 
   // Drop-zone frames + node refs in window coordinates, keyed by weekday index.
   const dayFrames = useRef<Record<number, Frame>>({});
@@ -280,10 +283,27 @@ export function ThisWeekScreen() {
       >
         <View style={styles.inner}>
           <View style={styles.topBar}>
-            <Text style={styles.heading}>This Week</Text>
-            <Pressable onPress={handleSignOut} hitSlop={8}>
-              <Text style={styles.signOut}>Sign out</Text>
-            </Pressable>
+            <Text style={styles.heading} numberOfLines={1}>
+              Week of {formatMonthDay(week[0].iso)}
+            </Text>
+            <View style={styles.topActions}>
+              <Pressable
+                onPress={() => setEditMode((e) => !e)}
+                style={styles.topActionBtn}
+                hitSlop={8}
+              >
+                <Text style={styles.topAction}>
+                  {editMode ? 'Done' : 'Edit'}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSignOut}
+                style={styles.topActionBtn}
+                hitSlop={8}
+              >
+                <Text style={styles.topAction}>Sign out</Text>
+              </Pressable>
+            </View>
           </View>
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -413,6 +433,7 @@ export function ThisWeekScreen() {
                     exercisesById={exercisesById}
                     performedOn={iso}
                     logs={logs}
+                    editMode={editMode}
                     onOpenChart={openChart}
                     onRemove={(id) => handleRemove(id, weekday)}
                     onClearLog={(id) => handleClearLog(id, iso)}
@@ -530,6 +551,7 @@ interface DayTableProps {
   exercisesById: Map<string, Exercise>;
   performedOn: string;
   logs: Record<string, WorkoutLog>;
+  editMode: boolean;
   onOpenChart: (id: string) => void;
   onRemove: (id: string) => void;
   onClearLog: (id: string) => void;
@@ -543,6 +565,7 @@ function DayTable({
   exercisesById,
   performedOn,
   logs,
+  editMode,
   onOpenChart,
   onRemove,
   onClearLog,
@@ -634,7 +657,7 @@ function DayTable({
   return (
     <View style={styles.table}>
       <View style={[styles.row, styles.headerRow]}>
-        <View style={styles.colHandle} />
+        {editMode ? <View style={styles.colHandle} /> : null}
         <Text
           numberOfLines={1}
           style={[styles.cell, styles.colExercise, styles.headerText]}
@@ -653,9 +676,9 @@ function DayTable({
         >
           Wt/Mins
         </Text>
-        <View style={styles.colChart} />
         <View style={styles.colStatus} />
-        <View style={styles.colRemove} />
+        <View style={styles.colChart} />
+        {editMode ? <View style={styles.colRemove} /> : null}
       </View>
 
       {exerciseIds.map((id, index) => {
@@ -686,13 +709,16 @@ function DayTable({
                   exercise={ex}
                   performedOn={performedOn}
                   initial={logs[logKey(id, performedOn)]}
+                  editMode={editMode}
                   dragHandle={
-                    <DragHandle
-                      index={index}
-                      onStart={handleDragStart}
-                      onMove={handleDragMove}
-                      onDrop={handleDrop}
-                    />
+                    editMode ? (
+                      <DragHandle
+                        index={index}
+                        onStart={handleDragStart}
+                        onMove={handleDragMove}
+                        onDrop={handleDrop}
+                      />
+                    ) : null
                   }
                   onOpenChart={() => onOpenChart(id)}
                   onRemove={() => onRemove(id)}
@@ -757,6 +783,7 @@ interface WorkoutRowProps {
   exercise: Exercise;
   performedOn: string;
   initial?: WorkoutLog;
+  editMode: boolean;
   dragHandle: React.ReactNode;
   onOpenChart: () => void;
   onRemove: () => void;
@@ -768,6 +795,7 @@ function WorkoutRow({
   exercise,
   performedOn,
   initial,
+  editMode,
   dragHandle,
   onOpenChart,
   onRemove,
@@ -887,6 +915,9 @@ function WorkoutRow({
         onBlur={save}
         keyboardType="decimal-pad"
       />
+      <View style={styles.colStatus}>
+        <StatusDot status={status} />
+      </View>
       <Pressable
         style={[styles.cell, styles.colChart]}
         onPress={onOpenChart}
@@ -894,12 +925,11 @@ function WorkoutRow({
       >
         <Text style={styles.chartIcon}>📈</Text>
       </Pressable>
-      <View style={styles.colStatus}>
-        <StatusDot status={status} />
-      </View>
-      <Pressable style={styles.colRemove} onPress={onRemove} hitSlop={6}>
-        <Text style={styles.remove}>×</Text>
-      </Pressable>
+      {editMode ? (
+        <Pressable style={styles.colRemove} onPress={onRemove} hitSlop={6}>
+          <Text style={styles.remove}>×</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -1010,14 +1040,27 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   heading: {
+    flexShrink: 1,
+    marginRight: SPACING.sm,
     fontSize: FONT.xxl,
     fontWeight: '800',
     color: COLORS.text,
   },
-  signOut: {
-    color: COLORS.primary,
+  topActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  topActionBtn: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+  },
+  topAction: {
+    color: COLORS.text,
     fontSize: FONT.md,
-    fontWeight: '600',
   },
   error: {
     color: COLORS.danger,
