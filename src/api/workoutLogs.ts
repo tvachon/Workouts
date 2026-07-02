@@ -22,6 +22,31 @@ export async function listLogsForExercise(
   return (data ?? []) as WorkoutLog[];
 }
 
+/**
+ * The most recent log strictly before `before` for each of the given
+ * exercises, keyed by exercise id. Used to seed the week grid with faint
+ * "last time" placeholders for exercises whose history predates this week.
+ */
+export async function latestLogBeforePerExercise(
+  exerciseIds: string[],
+  before: string,
+): Promise<Record<string, WorkoutLog>> {
+  if (exerciseIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from('workout_logs')
+    .select('*')
+    .in('exercise_id', exerciseIds)
+    .lt('performed_on', before)
+    .order('performed_on', { ascending: false });
+  if (error) throw error;
+  // Rows arrive newest-first, so the first one seen per exercise is its latest.
+  const latest: Record<string, WorkoutLog> = {};
+  for (const log of (data ?? []) as WorkoutLog[]) {
+    if (!latest[log.exercise_id]) latest[log.exercise_id] = log;
+  }
+  return latest;
+}
+
 /** All logs recorded on a given day, across every exercise. */
 export async function listLogsForDate(
   performedOn: string,
@@ -46,6 +71,26 @@ export async function listLogsForDateRange(
     .lte('performed_on', end);
   if (error) throw error;
   return (data ?? []) as WorkoutLog[];
+}
+
+/**
+ * The most recent log for an exercise strictly before a date, if any.
+ * Used to hint the entry form with what was lifted last time.
+ */
+export async function getLatestLogBefore(
+  exerciseId: string,
+  performedOn: string,
+): Promise<WorkoutLog | null> {
+  const { data, error } = await supabase
+    .from('workout_logs')
+    .select('*')
+    .eq('exercise_id', exerciseId)
+    .lt('performed_on', performedOn)
+    .order('performed_on', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as WorkoutLog | null) ?? null;
 }
 
 /** The single log for an exercise on a given day, if one exists. */

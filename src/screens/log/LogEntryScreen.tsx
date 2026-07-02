@@ -12,6 +12,7 @@ import { COLORS, FONT, SPACING } from '../../constants/theme';
 import { getExercise } from '../../api/exercises';
 import {
   deleteLog,
+  getLatestLogBefore,
   getLogForDate,
   upsertLog,
 } from '../../api/workoutLogs';
@@ -35,6 +36,7 @@ export function LogEntryScreen({ route }: { route: Entry }) {
   const [reps, setReps] = useState('');
   const [notes, setNotes] = useState('');
   const [existing, setExisting] = useState<WorkoutLog | null>(null);
+  const [lastLog, setLastLog] = useState<WorkoutLog | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -54,6 +56,8 @@ export function LogEntryScreen({ route }: { route: Entry }) {
         }
       })
       .catch(() => {});
+    // The previous session's numbers double as placeholders in the fields.
+    getLatestLogBefore(exerciseId, initial).then(setLastLog).catch(() => {});
   }, [exerciseId, performedOn]);
 
   useLayoutEffect(() => {
@@ -141,14 +145,14 @@ export function LogEntryScreen({ route }: { route: Entry }) {
         label={`Weight (${unit})`}
         value={weight}
         onChangeText={setWeight}
-        placeholder="0"
+        placeholder={lastLog?.weight != null ? String(lastLog.weight) : '0'}
         keyboardType="decimal-pad"
       />
       <TextField
         label="Reps/Mi"
         value={reps}
         onChangeText={setReps}
-        placeholder="0"
+        placeholder={lastLog?.reps != null ? String(lastLog.reps) : '0'}
         keyboardType="decimal-pad"
       />
       <TextField

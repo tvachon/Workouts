@@ -33,7 +33,12 @@ import {
   removeExerciseFromDay,
   reorderDayExercises,
 } from '../../api/routine';
-import { deleteLog, listLogsForDateRange, upsertLog } from '../../api/workoutLogs';
+import {
+  deleteLog,
+  latestLogBeforePerExercise,
+  listLogsForDateRange,
+  upsertLog,
+} from '../../api/workoutLogs';
 import type { Exercise, WorkoutLog } from '../../types/db.types';
 import type { RootStackParamList } from '../../types/navigation.types';
 import { currentWeek, formatMonthDay } from '../../utils/dates';
@@ -72,6 +77,9 @@ export function ThisWeekScreen() {
 
   const week = useMemo(() => currentWeek(), []);
   const [logs, setLogs] = useState<Record<string, WorkoutLog>>({});
+  // Each exercise's most recent log from before this week, for "last time"
+  // placeholders on days whose history predates the visible range.
+  const [priorLogs, setPriorLogs] = useState<Record<string, WorkoutLog>>({});
   // Latest logs without re-creating the clear handler on every keystroke-save.
   const logsRef = useRef(logs);
   logsRef.current = logs;
@@ -139,11 +147,42 @@ export function ThisWeekScreen() {
     }, [refreshAll]),
   );
 
+  // Pull each exercise's last pre-week log once the exercise list is known.
+  // Failures are silent: placeholders are a nicety, not load-bearing.
+  const exerciseIds = useMemo(() => exercises.map((e) => e.id), [exercises]);
+  useEffect(() => {
+    if (exerciseIds.length === 0) {
+      setPriorLogs({});
+      return;
+    }
+    latestLogBeforePerExercise(exerciseIds, week[0].iso)
+      .then(setPriorLogs)
+      .catch(() => {});
+  }, [exerciseIds, week]);
+
   const exercisesById = useMemo(() => {
     const m = new Map<string, Exercise>();
     for (const e of exercises) m.set(e.id, e);
     return m;
   }, [exercises]);
+
+  // Resolve the "last time" log for one exercise on one day: the most recent
+  // entry strictly before that day, drawn from earlier days already logged this
+  // week and, failing that, its last log from before the week.
+  const lastLogFor = useCallback(
+    (exerciseId: string, performedOn: string): WorkoutLog | undefined => {
+      let best: WorkoutLog | undefined;
+      for (const { iso } of week) {
+        if (iso >= performedOn) continue;
+        const log = logs[logKey(exerciseId, iso)];
+        if (log && (!best || log.performed_on > best.performed_on)) best = log;
+      }
+      const prior = priorLogs[exerciseId];
+      if (prior && (!best || prior.performed_on > best.performed_on)) best = prior;
+      return best;
+    },
+    [week, logs, priorLogs],
+  );
 
   // Re-measure all day drop zones (accounts for scroll position / palette state).
   const measureFrames = useCallback(() => {
@@ -433,6 +472,7 @@ export function ThisWeekScreen() {
                     exercisesById={exercisesById}
                     performedOn={iso}
                     logs={logs}
+                    lastLogFor={lastLogFor}
                     editMode={editMode}
                     onOpenChart={openChart}
                     onRemove={(id) => handleRemove(id, weekday)}
@@ -551,6 +591,7 @@ interface DayTableProps {
   exercisesById: Map<string, Exercise>;
   performedOn: string;
   logs: Record<string, WorkoutLog>;
+  lastLogFor: (exerciseId: string, performedOn: string) => WorkoutLog | undefined;
   editMode: boolean;
   onOpenChart: (id: string) => void;
   onRemove: (id: string) => void;
@@ -565,6 +606,7 @@ function DayTable({
   exercisesById,
   performedOn,
   logs,
+  lastLogFor,
   editMode,
   onOpenChart,
   onRemove,
@@ -709,6 +751,7 @@ function DayTable({
                   exercise={ex}
                   performedOn={performedOn}
                   initial={logs[logKey(id, performedOn)]}
+                  lastLog={lastLogFor(id, performedOn)}
                   editMode={editMode}
                   dragHandle={
                     editMode ? (
@@ -783,6 +826,7 @@ interface WorkoutRowProps {
   exercise: Exercise;
   performedOn: string;
   initial?: WorkoutLog;
+  lastLog?: WorkoutLog;
   editMode: boolean;
   dragHandle: React.ReactNode;
   onOpenChart: () => void;
@@ -795,6 +839,7 @@ function WorkoutRow({
   exercise,
   performedOn,
   initial,
+  lastLog,
   editMode,
   dragHandle,
   onOpenChart,
@@ -907,6 +952,8 @@ function WorkoutRow({
         onChangeText={setReps}
         onBlur={save}
         keyboardType="decimal-pad"
+        placeholder={lastLog?.reps != null ? String(lastLog.reps) : undefined}
+        placeholderTextColor={COLORS.textFaint}
       />
       <TextInput
         style={[styles.cell, styles.colWeight, styles.input]}
@@ -914,6 +961,8 @@ function WorkoutRow({
         onChangeText={setWeight}
         onBlur={save}
         keyboardType="decimal-pad"
+        placeholder={lastLog?.weight != null ? String(lastLog.weight) : undefined}
+        placeholderTextColor={COLORS.textFaint}
       />
       <View style={styles.colStatus}>
         <StatusDot status={status} />

@@ -19,6 +19,30 @@ interface MetricLineChartProps {
 
 const CHART_HEIGHT = 200;
 const MAX_LABELS = 6;
+// Left on its own, gifted-charts picks a y-axis max just above the data max,
+// which lands the gridline steps on odd numbers or decimals. Instead, force
+// each step to 1, 2, or 5 times a power of ten (…, 0.5, 1, 2, 5, 10, 20, …),
+// trying a few section counts and keeping whichever wastes the least headroom.
+function niceAxis(dataMax: number): { max: number; sections: number } {
+  let best = { max: 4, sections: 4 };
+  if (!Number.isFinite(dataMax) || dataMax <= 0) return best;
+  best.max = Infinity;
+  for (const sections of [4, 5, 6]) {
+    const rough = dataMax / sections;
+    const pow = 10 ** Math.floor(Math.log10(rough));
+    let step = [1, 2, 5, 10].map((m) => m * pow).find((s) => s >= rough)!;
+    // Fractional steps only make sense when the data itself is fractional.
+    if (dataMax >= 1 && step < 1) step = 1;
+    if (step * sections < best.max) best = { max: step * sections, sections };
+  }
+  return best;
+}
+
+// Steps like 0.2 accumulate float noise ("0.6000000000000001"); trim it.
+function cleanAxisLabel(label: string): string {
+  const n = Number(label);
+  return Number.isFinite(n) ? String(Number(n.toFixed(3))) : label;
+}
 
 export function MetricLineChart({
   title,
@@ -35,6 +59,8 @@ export function MetricLineChart({
     label: i % labelEvery === 0 ? p.label : undefined,
     dataPointText: undefined,
   }));
+
+  const axis = niceAxis(Math.max(...data.map((p) => p.value), 0));
 
   const initialSpacing = 12;
   const endSpacing = 12;
@@ -73,7 +99,9 @@ export function MetricLineChart({
           yAxisTextStyle={styles.axisText}
           xAxisLabelTextStyle={styles.axisText}
           yAxisLabelWidth={yAxisWidth}
-          noOfSections={4}
+          noOfSections={axis.sections}
+          maxValue={axis.max}
+          formatYLabel={cleanAxisLabel}
           adjustToWidth
         />
       )}

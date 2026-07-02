@@ -6,6 +6,7 @@ export const COLORS = {
   surfaceAlt: '#EEF1F6',
   text: '#1A1D23',
   textMuted: '#6B7280',
+  textFaint: '#B0B6C0', // light gray, e.g. "last time" placeholder hints
   border: '#E3E6EB',
   primary: '#2563EB', // weight line
   accent: '#F97316', // reps line
