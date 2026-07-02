@@ -12,7 +12,7 @@ import { Button } from '../../components/Button';
 import { TextField } from '../../components/TextField';
 import { LogRow } from '../../components/LogRow';
 import { MetricLineChart } from '../../components/Chart/MetricLineChart';
-import { COLORS, FONT, RADIUS, SPACING } from '../../constants/theme';
+import { COLORS, FONT, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import {
   createExercise,
   deleteExercise,
@@ -321,9 +321,8 @@ const styles = StyleSheet.create({
   },
   pickerWrap: {
     backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     borderRadius: RADIUS.md,
+    ...SHADOWS.inset,
     marginBottom: SPACING.lg,
     overflow: 'hidden',
   },

@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { COLORS, FONT, RADIUS, SPACING } from '../constants/theme';
+import { COLORS, FONT, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 import type { Exercise, WorkoutLog } from '../types/db.types';
 import { formatDisplayDate } from '../utils/dates';
 
@@ -43,12 +43,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.sm,
+    borderRadius: RADIUS.md,
+    ...SHADOWS.raisedSm,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
-    marginBottom: SPACING.xs,
+    // Extra gap so neighbouring rows' soft shadows don't overlap into mud.
+    marginBottom: SPACING.md,
   },
   left: {
     flex: 1,

@@ -6,7 +6,7 @@ import {
   View,
   type KeyboardTypeOptions,
 } from 'react-native';
-import { COLORS, FONT, RADIUS, SPACING } from '../constants/theme';
+import { COLORS, FONT, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 
 interface TextFieldProps {
   label: string;
@@ -60,9 +60,8 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     borderRadius: RADIUS.md,
+    ...SHADOWS.inset,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
     fontSize: FONT.md,

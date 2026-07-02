@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
-import { COLORS, FONT, RADIUS, SPACING } from '../../constants/theme';
+import { COLORS, FONT, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 
 export interface ChartPoint {
   value: number;
@@ -112,12 +112,12 @@ export function MetricLineChart({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
+    borderRadius: RADIUS.lg,
+    ...SHADOWS.raised,
     padding: SPACING.md,
     marginBottom: SPACING.lg,
-    overflow: 'hidden',
+    // `hidden` would clip the soft outer shadow; the chart already fits the card.
+    overflow: 'visible',
   },
   title: {
     fontSize: FONT.md,

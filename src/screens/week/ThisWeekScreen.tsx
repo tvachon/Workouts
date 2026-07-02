@@ -6,9 +6,9 @@ import React, {
   useState,
 } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Animated,
+  Easing,
   PanResponder,
   Platform,
   Pressable,
@@ -21,9 +21,10 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Polyline } from 'react-native-svg';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { COLORS, FONT, MAX_CONTENT_WIDTH, RADIUS, SPACING } from '../../constants/theme';
+import { COLORS, FONT, MAX_CONTENT_WIDTH, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import {
   AlertIcon,
   ArrowDownIcon,
@@ -997,12 +998,111 @@ function WorkoutRow({
   );
 }
 
+// Blend two #rrggbb colors; t=0 → a, t=1 → b.
+function mixHex(a: string, b: string, t: number): string {
+  const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
+  const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
+  const c = pa.map((v, i) => Math.round(v + (pb[i] - v) * t));
+  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+}
+
+// Rough path length of the checkmark polyline below, used to reveal the stroke
+// by animating its dash offset from fully-hidden (CHECK_LEN) to drawn (0).
+const CHECK_LEN = 24;
+
+// A checkmark that draws itself in (green) as the row saves — replacing the old
+// spinner — then, once the save settles, fades from green to a light gray so it
+// reads as "saved!" without leaving a loud mark on the row.
+function AnimatedCheck({ settled }: { settled: boolean }) {
+  const draw = useRef(new Animated.Value(0)).current; // 0→1 stroke reveal
+  const fade = useRef(new Animated.Value(0)).current; // 0→1 green→light gray
+  const [offset, setOffset] = useState(-CHECK_LEN);
+  const [color, setColor] = useState<string>(COLORS.success);
+
+  // Draw the checkmark in once on mount (while the save is in flight).
+  useEffect(() => {
+    // Negative offset reveals the stroke from the opposite end of the path.
+    const id = draw.addListener(({ value }) =>
+      setOffset(-CHECK_LEN * (1 - value)),
+    );
+    const anim = Animated.timing(draw, {
+      toValue: 1,
+      duration: 380,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false, // stroke offset runs on the JS thread via the listener
+    });
+    anim.start();
+    return () => {
+      draw.removeListener(id);
+      anim.stop();
+    };
+  }, [draw]);
+
+  // Once the save has settled, fade from green to a light gray.
+  useEffect(() => {
+    if (!settled) return;
+    const id = fade.addListener(({ value }) =>
+      setColor(mixHex(COLORS.success, COLORS.textFaint, value)),
+    );
+    const anim = Animated.timing(fade, {
+      toValue: 1,
+      duration: 650,
+      delay: 300, // hold green briefly after the draw completes
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false,
+    });
+    anim.start();
+    return () => {
+      fade.removeListener(id);
+      anim.stop();
+    };
+  }, [settled, fade]);
+
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+      <Polyline
+        points="20 6 9 17 4 12"
+        stroke={color}
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeDasharray={CHECK_LEN}
+        strokeDashoffset={offset}
+      />
+    </Svg>
+  );
+}
+
 function StatusDot({ status }: { status: RowStatus }) {
-  if (status === 'saving')
-    return <ActivityIndicator size="small" color={COLORS.textMuted} />;
-  if (status === 'saved')
-    return <CheckIcon size={16} color={COLORS.success} strokeWidth={2.5} />;
+  const prev = useRef<RowStatus | null>(null);
+  // `active` marks a live save cycle this mount (draw-in → fade); `cycle`
+  // remounts AnimatedCheck so each new save redraws the checkmark fresh.
+  const [active, setActive] = useState(false);
+  const [cycle, setCycle] = useState(0);
+
+  useEffect(() => {
+    if (status === 'saving' && prev.current !== 'saving') {
+      setActive(true);
+      setCycle((n) => n + 1);
+    } else if (status === 'idle' || status === 'error') {
+      setActive(false);
+    }
+    prev.current = status;
+  }, [status]);
+
   if (status === 'error') return <AlertIcon size={16} color={COLORS.danger} />;
+  // Drawing in (green) while saving, then fading to light gray once saved. The
+  // stable `cycle` key keeps the same instance across saving→saved so the drawn
+  // stroke stays put and only its color animates.
+  if (status === 'saving')
+    return <AnimatedCheck key={cycle} settled={false} />;
+  if (status === 'saved')
+    return active ? (
+      <AnimatedCheck key={cycle} settled />
+    ) : (
+      // Rows that load already-logged show a quiet light-gray check, no draw.
+      <CheckIcon size={16} color={COLORS.textFaint} strokeWidth={2.5} />
+    );
   return null;
 }
 
@@ -1114,11 +1214,11 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   topActionBtn: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
     borderRadius: RADIUS.sm,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
+    ...SHADOWS.raisedSm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
   },
   topAction: {
     color: COLORS.text,
@@ -1131,12 +1231,11 @@ const styles = StyleSheet.create({
 
   /* palette */
   palette: {
-    backgroundColor: COLORS.surfaceAlt,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    ...SHADOWS.raised,
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    paddingVertical: SPACING.md,
     marginBottom: SPACING.lg,
   },
   paletteLifted: {
@@ -1206,10 +1305,9 @@ const styles = StyleSheet.create({
     fontSize: FONT.sm,
   },
   chip: {
-    backgroundColor: '#E5E7EB',
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
     borderRadius: RADIUS.pill,
+    ...SHADOWS.raisedSm,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     maxWidth: 160,
@@ -1217,10 +1315,8 @@ const styles = StyleSheet.create({
     userSelect: 'none',
   },
   chipDragging: {
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    // Lift further off the surface while being dragged.
+    boxShadow: `-8px -8px 18px ${COLORS.shadowLight}, 8px 8px 18px ${COLORS.shadowDark}`,
   },
   chipText: {
     color: COLORS.text,
@@ -1235,8 +1331,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.xs,
     backgroundColor: 'transparent',
+    borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: COLORS.primary,
+    // Reads as a flat action, not a raised draggable chip.
+    boxShadow: 'none',
   },
   addChipPressed: {
     opacity: 0.6,
@@ -1250,19 +1349,19 @@ const styles = StyleSheet.create({
   /* day section */
   daySection: {
     backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
+    borderRadius: RADIUS.lg,
+    ...SHADOWS.raised,
     padding: SPACING.md,
-    marginBottom: SPACING.md,
+    // Room between raised cards so their soft shadows read cleanly.
+    marginBottom: SPACING.lg,
   },
   dayToday: {
-    borderColor: COLORS.primary,
+    // Orange highlight ring layered over the neumorphic shadow for "today".
+    boxShadow: `0 0 0 2px ${COLORS.primary}, -6px -6px 14px ${COLORS.shadowLight}, 6px 6px 14px ${COLORS.shadowDark}`,
   },
   dayActive: {
-    borderColor: COLORS.primary,
-    borderWidth: 2,
-    backgroundColor: '#EEF3FF',
+    // Drop target while dragging: recessed with an orange ring.
+    boxShadow: `0 0 0 2px ${COLORS.primary}, inset 3px 3px 6px ${COLORS.shadowDark}, inset -3px -3px 6px ${COLORS.shadowLight}`,
   },
   dayHeader: {
     flexDirection: 'row',
@@ -1314,11 +1413,9 @@ const styles = StyleSheet.create({
   },
   rowDragging: {
     backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.sm,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    borderRadius: RADIUS.md,
+    // Lift the row off the surface while it's being reordered.
+    boxShadow: `-6px -6px 14px ${COLORS.shadowLight}, 6px 6px 14px ${COLORS.shadowDark}`,
   },
   dropLine: {
     height: 2,
@@ -1380,13 +1477,14 @@ const styles = StyleSheet.create({
   input: {
     fontSize: FONT.md,
     color: COLORS.text,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
     borderRadius: RADIUS.sm,
-    // A couple of pixels of breathing room so the bordered fields don't touch.
+    ...SHADOWS.inset,
+    // A couple of pixels of breathing room so the recessed fields don't touch.
     marginHorizontal: 2,
     marginVertical: 2,
     // Half the cell's vertical padding (SPACING.sm) for a tighter field.
     paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.xs,
   },
 });

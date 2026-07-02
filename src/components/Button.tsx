@@ -6,7 +6,7 @@ import {
   Text,
   type ViewStyle,
 } from 'react-native';
-import { COLORS, FONT, RADIUS, SPACING } from '../constants/theme';
+import { COLORS, FONT, RADIUS, SHADOWS, SPACING } from '../constants/theme';
 
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
 
@@ -28,6 +28,9 @@ export function Button({
   style,
 }: ButtonProps) {
   const isDisabled = disabled || loading;
+  // Ghost buttons stay flat; everything else is a raised neumorphic surface
+  // that presses inward on tap.
+  const flat = variant === 'ghost';
   return (
     <Pressable
       onPress={onPress}
@@ -35,7 +38,9 @@ export function Button({
       style={({ pressed }) => [
         styles.base,
         variantStyles[variant],
+        flat ? null : SHADOWS.raised,
         pressed && !isDisabled ? styles.pressed : null,
+        pressed && !isDisabled && !flat ? SHADOWS.pressed : null,
         isDisabled ? styles.disabled : null,
         style,
       ]}
@@ -54,18 +59,17 @@ export function Button({
 const styles = StyleSheet.create({
   base: {
     minHeight: 48,
-    borderRadius: RADIUS.md,
+    borderRadius: RADIUS.lg,
     paddingHorizontal: SPACING.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
   },
   label: {
     fontSize: FONT.md,
     fontWeight: '600',
   },
   pressed: {
-    opacity: 0.8,
+    opacity: 0.9,
   },
   disabled: {
     opacity: 0.5,
@@ -73,10 +77,10 @@ const styles = StyleSheet.create({
 });
 
 const variantStyles: Record<Variant, ViewStyle> = {
-  primary: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  secondary: { backgroundColor: COLORS.surface, borderColor: COLORS.border },
-  danger: { backgroundColor: COLORS.surface, borderColor: COLORS.danger },
-  ghost: { backgroundColor: 'transparent', borderColor: 'transparent' },
+  primary: { backgroundColor: COLORS.primary },
+  secondary: { backgroundColor: COLORS.surface },
+  danger: { backgroundColor: COLORS.surface },
+  ghost: { backgroundColor: 'transparent' },
 };
 
 const textColor: Record<Variant, string> = {
