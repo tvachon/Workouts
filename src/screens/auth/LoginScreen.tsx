@@ -4,6 +4,7 @@ import { Screen } from '../../components/Screen';
 import { Button } from '../../components/Button';
 import { TextField } from '../../components/TextField';
 import { COLORS, FONT, SPACING } from '../../constants/theme';
+import { DumbbellIcon } from '../../components/icons';
 import { useAuth } from '../../context/AuthContext';
 import { messageOf } from '../../utils/errors';
 
@@ -46,7 +47,7 @@ export function LoginScreen() {
   return (
     <Screen contentStyle={styles.center}>
       <View style={styles.header}>
-        <Text style={styles.logo}>🏋️</Text>
+        <DumbbellIcon size={48} color={COLORS.primary} strokeWidth={2.2} />
         <Text style={styles.appName}>Workouts</Text>
         <Text style={styles.tagline}>Track lifts. Watch progress.</Text>
       </View>
@@ -97,9 +98,6 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: SPACING.xxl,
-  },
-  logo: {
-    fontSize: 48,
   },
   appName: {
     fontSize: FONT.xxl,

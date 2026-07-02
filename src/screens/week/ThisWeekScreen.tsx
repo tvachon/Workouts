@@ -24,6 +24,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS, FONT, MAX_CONTENT_WIDTH, RADIUS, SPACING } from '../../constants/theme';
+import {
+  AlertIcon,
+  ArrowDownIcon,
+  ChartIcon,
+  CheckIcon,
+  ChevronRightIcon,
+  GripIcon,
+  PlusIcon,
+  XIcon,
+} from '../../components/icons';
 import { weekdayLabel } from '../../constants/weekdays';
 import { useAuth } from '../../context/AuthContext';
 import { useExercises } from '../../hooks/useExercises';
@@ -353,8 +363,8 @@ export function ThisWeekScreen() {
               onPress={() => setPaletteOpen((o) => !o)}
             >
               <Text style={styles.paletteTitle}>Add Exercises</Text>
-              {/* Caret (closed) ↔ red ✕ badge (open), cross-faded as the panel
-                  toggles so the "tap to close" affordance animates in. */}
+              {/* Chevron (closed) cross-fades to a red close badge (open) as the
+                  panel toggles so the "tap to close" affordance animates in. */}
               <View style={styles.headerToggle}>
                 <Animated.View
                   style={[
@@ -367,7 +377,7 @@ export function ThisWeekScreen() {
                     },
                   ]}
                 >
-                  <Text style={styles.chevron}>›</Text>
+                  <ChevronRightIcon size={20} color={COLORS.textMuted} />
                 </Animated.View>
                 <Animated.View
                   style={[
@@ -386,7 +396,7 @@ export function ThisWeekScreen() {
                   ]}
                 >
                   <View style={styles.closeBadge}>
-                    <Text style={styles.closeBadgeText}>✕</Text>
+                    <XIcon size={14} color={COLORS.onPrimary} strokeWidth={2.5} />
                   </View>
                 </Animated.View>
               </View>
@@ -415,7 +425,7 @@ export function ThisWeekScreen() {
               <View onLayout={onPaletteBodyLayout}>
                 {exercises.length === 0 ? (
                   <Text style={styles.emptyHint}>
-                    No exercises yet — tap “＋ New” to add your first one.
+                    No exercises yet — tap “New” to add your first one.
                   </Text>
                 ) : null}
                 <View style={styles.chips}>
@@ -437,12 +447,16 @@ export function ThisWeekScreen() {
                       pressed ? styles.addChipPressed : null,
                     ]}
                   >
-                    <Text style={styles.addChipText}>＋ New</Text>
+                    <PlusIcon size={14} color={COLORS.primary} strokeWidth={2.5} />
+                    <Text style={styles.addChipText}>New</Text>
                   </Pressable>
                 </View>
-                <Text style={styles.paletteHint}>
-                  Drag exercises to any day below ↓
-                </Text>
+                <View style={styles.paletteHint}>
+                  <Text style={styles.paletteHintText}>
+                    Drag exercises to any day below
+                  </Text>
+                  <ArrowDownIcon size={13} color={COLORS.textMuted} />
+                </View>
               </View>
             </Animated.View>
           </View>
@@ -815,7 +829,7 @@ function DragHandle({ index, onStart, onMove, onDrop }: DragHandleProps) {
       style={[styles.colHandle, dragSurfaceWebStyle]}
       hitSlop={8}
     >
-      <Text style={styles.handleIcon}>☰</Text>
+      <GripIcon size={16} color={COLORS.textMuted} />
     </View>
   );
 }
@@ -972,11 +986,11 @@ function WorkoutRow({
         onPress={onOpenChart}
         hitSlop={6}
       >
-        <Text style={styles.chartIcon}>📈</Text>
+        <ChartIcon size={17} color={COLORS.primary} />
       </Pressable>
       {editMode ? (
         <Pressable style={styles.colRemove} onPress={onRemove} hitSlop={6}>
-          <Text style={styles.remove}>×</Text>
+          <XIcon size={16} color={COLORS.danger} />
         </Pressable>
       ) : null}
     </View>
@@ -987,9 +1001,8 @@ function StatusDot({ status }: { status: RowStatus }) {
   if (status === 'saving')
     return <ActivityIndicator size="small" color={COLORS.textMuted} />;
   if (status === 'saved')
-    return <Text style={[styles.statusIcon, { color: COLORS.success }]}>✓</Text>;
-  if (status === 'error')
-    return <Text style={[styles.statusIcon, { color: COLORS.danger }]}>!</Text>;
+    return <CheckIcon size={16} color={COLORS.success} strokeWidth={2.5} />;
+  if (status === 'error') return <AlertIcon size={16} color={COLORS.danger} />;
   return null;
 }
 
@@ -1148,11 +1161,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text,
   },
-  chevron: {
-    fontSize: FONT.lg,
-    color: COLORS.textMuted,
-    fontWeight: '700',
-  },
   // Fixed slot the caret and close badge share so they overlay for the cross-fade.
   headerToggle: {
     width: 24,
@@ -1175,12 +1183,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  closeBadgeText: {
-    color: COLORS.onPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-    lineHeight: 16,
-  },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1193,10 +1195,15 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
   },
   paletteHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    marginTop: SPACING.md,
+  },
+  paletteHintText: {
     color: COLORS.textMuted,
     fontSize: FONT.sm,
-    marginTop: SPACING.md,
-    textAlign: 'center',
   },
   chip: {
     backgroundColor: '#E5E7EB',
@@ -1221,9 +1228,12 @@ const styles = StyleSheet.create({
     fontSize: FONT.sm,
     userSelect: 'none',
   },
-  // Trailing "＋ New" chip — same pill footprint as a chip, dashed to read as
+  // Trailing "New" chip — same pill footprint as a chip, dashed to read as
   // an action rather than a draggable item.
   addChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
     backgroundColor: 'transparent',
     borderStyle: 'dashed',
     borderColor: COLORS.primary,
@@ -1322,11 +1332,6 @@ const styles = StyleSheet.create({
     // Stop the browser selecting the glyph on mousedown (it steals the gesture).
     userSelect: 'none',
   },
-  handleIcon: {
-    fontSize: FONT.md,
-    color: COLORS.textMuted,
-    userSelect: 'none',
-  },
   cell: {
     paddingHorizontal: SPACING.xs,
     paddingVertical: SPACING.sm,
@@ -1383,17 +1388,5 @@ const styles = StyleSheet.create({
     marginVertical: 2,
     // Half the cell's vertical padding (SPACING.sm) for a tighter field.
     paddingVertical: SPACING.xs,
-  },
-  chartIcon: {
-    fontSize: FONT.md,
-  },
-  statusIcon: {
-    fontSize: FONT.md,
-    fontWeight: '800',
-  },
-  remove: {
-    fontSize: FONT.lg,
-    color: COLORS.danger,
-    fontWeight: '700',
   },
 });
